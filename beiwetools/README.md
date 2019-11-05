@@ -32,7 +32,6 @@ from beiwetools.helpers.time import to_timestamp
 
 
 ___
-
 ## Table of Contents
 1.  [Version Notes](#version)  
 2.  [Overview](#overview)  
@@ -49,8 +48,7 @@ ___
 
 
 ___
-<a name="version"/>
-## Version Notes
+## Version Notes <a name="version"/>
 
 This is version 0.0.1 of `beiwetools`.  This package was developed with Python 3.7.4 on PCs running Manjaro Illyria 18.0.4.
 
@@ -62,8 +60,7 @@ Among the package requirements, the following are not in the Python Standard Lib
 
 
 ___
-<a name="overview"/>
-## Overview
+## Overview <a name="overview"/>
 
 #### Beiwe Studies
 A *Beiwe study* corresponds to a collection of surveys and device settings.  These study parameters determine the app's behavior when it is installed on a user's phone, including:
