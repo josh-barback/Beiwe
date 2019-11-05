@@ -146,13 +146,13 @@ Position in the top list indicates day of the week, starting with Sunday.  (Note
 
 
 #### Local Time
-Some modules in this package report local times for various purposes.  
+Some modules in this package report local times for various purposes:
 
-File names or directory names may include the researcher's local date/time, formatted as: `%Y-%m-%d_%H:%M:%S_%Z`. 
+* File names or directory names may include the researcher's local date/time, formatted as: `%Y-%m-%d_%H:%M:%S_%Z`. 
 
-Log files may include the researcher's local date/time formatted as: `%Y-%m-%d %H:%M:%S %Z`.
+* Log files may include the researcher's local date/time formatted as: `%Y-%m-%d %H:%M:%S %Z`.
 
-User's local time
+* Except for timestamps, the `localize` sub-package always reports date/times in the user's local timezone (which may change during the follow-up period).
 
 
 ___
@@ -164,37 +164,48 @@ Raw Beiwe data may be downloaded from the backend and extracted to a directory c
 <raw data directory>/
 
 	<Beiwe User ID #1>/
+
 		identifiers/
 		<passive data stream #1>/
 		<passive data stream #2>/
 		.
 		.
 		.
-		audio/
-		tracking/
+
+		audio_recordings/
+			<audio survey identifier #1>/
+			<audio survey identifier #2>/
+			.
+			.
+			.
+
+		survey_answers/
+			<>/
+			<>/
+			.
+			.
+			.
+
+		survey_timings/
 
 	<Beiwe User ID #2>/
-		identifiers/
-		<passive data stream #1>/
-		<passive data stream #2>/
 		.
 		.
 		.
-		audio/
-		tracking/		
-	
-	.
-	.
-	.
 ```
 
 Note that `<raw data directory>` is typically a location chosen by the researcher.  The remainder of the directory structure is determined by the study's specific data collection settings.
 
 Each user's data are found in a folder labeled with the user's Beiwe ID, which is an alphanumeric string.  Multiple users enrolled in the same Beiwe study may have data folders in the same raw data directory.
 
-Each user's data directory will include a folder labeled `identifiers`; this contains files with records of the user's device.  Additional passive data folder names may be `accelerometer`, `calls`, `gps`, etc.
+Each user's data directory will include a folder labeled `identifiers`; this contains files with records of the user's device.  
 
-A user's data directory will also contain one folder for each type of survey that has been delivered.  Possible folder names are:
+Passive data folder names may be `accelerometer`, `calls`, `gps`, etc.
+
+If the study includes audio surveys, the recordings are found in 
+
+Raw data from tracking surveys are found two locations.
+
 
 ___
 ## `beiwetools.helpers` <a name="helpers"/>
@@ -202,18 +213,15 @@ ___
 This sub-package provides classes and functions that are used throughout `beiwetools` and also by Beiwe reporting packages (`accrep`, 'gpsrep', `survrep`).  Below is an overview of each module.
 
 #### `classes` & `functions`
-These modules provide general-purpose tools for tasks that often arise when working with Beiwe configurations and raw data.  Commonly used functions include those for performing basic list operations and for reading/writing JSON files as ordered dictionaries.  Commonly used classes include `Timer` (for timing data processing tasks) and `Summary` (for generating human-readable summaries of Beiwe objects).
-
-
-
+These are general-purpose tools for tasks that often arise when working with Beiwe configurations and raw data.
 
 #### `colors`
-A few functions for generating Color Brewer palettes.
+Some color maps and functions for generating Color Brewer palettes.
 
 #### `plot`
-	* Generating visual and numerical summaries of raw data,
+Functions for handling basic data visualization tasks, such as plotting timestamps and generating axis labels for longitudinal data.
 
-
+#### `proc_template`
 
 
 #### `process`
@@ -222,11 +230,8 @@ The tools in this module assume the Beiwe [file naming conventions](#files) and 
 #### `time` & `time_constants`
 The `time` module provides functions for working with the various [time formats](#time) found in Beiwe data.  Commonly used timezones and date-time formats are found in `time_constants`.
 
-
-
-
-
-
+#### `trackers`
+Classes for online calculation of summary statistics during data processing tasks.
 
 
 ___
@@ -315,18 +320,13 @@ ___
 
 This sub-package provides classes and functions for managing raw Beiwe data.  These tools are intended for use when processing data locally, e.g. on a PC with data that have been downloaded from the Beiwe backend.
 
-The `DeviceInfo` class 
+The `ProjectData` class can handle management of a single raw data directory, as well as merging of multiple raw data directories.  The latter may be useful under some circumstances:
 
+* Raw data from the same study may have been downloaded to multiple locations corresponding to different subsets of users or to different time ranges.  It may be desirable to create a single project that pools all users and time ranges.
 
+* Research participants may be organized into multiple arms, with smartphone data collection in each arm implemented with different Beiwe studies.  (This strategy might be used when different arms receive different surveys.)  In this case, it may be desirable to pool all users for analysis of common data streams and for preservation of blinding.
 
-The `ProjectData` class can handle management of a single raw data directory, as well as management of multiple directories as described above.
-
-
-In some cases, researchers may wish to merge Beiwe data from multiple raw data directories.  For example:
-
-* Raw data from the same study have been downloaded to multiple locations corresponding to different subsets of users or to different time ranges.  It may be desirable to create a single project that pools all users and time ranges.
-
-* Research participants are organized into multiple arms, with smartphone data collection in each arm implemented with different Beiwe studies.  (This strategy may be used when different arms receive different surveys.)  In this case, it may be desirable to pool all users for analysis of common data streams and for preservation of blinding.
+The `DeviceInfo` class manages information found in each user's `identifiers` directory.  A new set of identifiers is created when the Beiwe app is installed or re-installed, providing a partial record of each user's phone model, operating system, and Beiwe version.  Raw data from Android and iPhone devices are formatted differently, so researchers should use caution if data are collected for the same user ID with phones of different types.  In this unusual situation, the user's data should be carefully divided according to phone type and analyzed separately.
 
 
 ___
@@ -344,7 +344,6 @@ The `ProcData` class provides a framework for partitioning processed data into 2
 
 This module provides functions for generating simple visualizations of longitudinal data from `ProcData` objects.
 
-
 #### `fitabase`
 
 Some functions for loading fitabase data sets into a `ProcData` object.
@@ -353,7 +352,15 @@ Some functions for loading fitabase data sets into a `ProcData` object.
 ___
 ## Examples <a name="examples"/>
 
-Code samples (iPython notebooks) are located in the `examples` folder:
+Public Beiwe data sets can be downloaded here:
+
+`https://zenodo.org/record/1188879#.XcEV2HWYW03`
+
+The example data were collected from five different Beiwe studies.  The corresponding configuration files are located in:
+
+`examples/configuration_files`
+
+The following code samples (iPython notebooks) are also located in the `examples` folder:
 
  * `configread_example.ipynb`
  * `manage_example.ipynb`

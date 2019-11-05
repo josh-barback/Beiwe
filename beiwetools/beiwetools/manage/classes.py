@@ -9,6 +9,7 @@ from beiwetools.helpers.process import make_registry
 from beiwetools.helpers.functions import (sort_by, read_json, write_json, check_same,
                                           setup_directories, setup_csv, write_to_csv)
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -23,12 +24,14 @@ class DeviceInfo():
         identifiers (OrderedDict):  
             Keys are paths to identifier files.  
             Values are OrderedDicts that contain information from the corresponding identifier file.
-        current (OrderedDict):  
-            The most recent information about the device.
-            Keys are column headers from an identifier file, 
-            e.g. 'device_os', 'os_version'.        
+        phone_history (OrderedDict):
+            Obtained from the 'device_os' column in identifiers.
+            Keys are timestamps when phone info was observed.
+            Values are either 'iPhone' or 'Android'.
     '''
     def __init__(self, paths):
+        if type(paths) is str:
+            paths = [paths]
         # sort paths according to file creation date
         paths = sort_by(paths, [os.path.basename(p) for p in paths])
         # read identifiers in order of creation
@@ -43,9 +46,45 @@ class DeviceInfo():
             # Replace comma with an underscore:
             if len(values) > len(keys):
                 values = values[:-2] + ['_'.join(values[-2:])]        
-            self.identifiers[p] = OrderedDict(zip(keys, values))        
-        self.current = self.identifiers[paths[-1]]
+            self.identifiers[p] = OrderedDict(zip(keys, values))  
+        self.phone_history = self.get_phone_history()
+    
+    def get_history(self, header):
+        '''
+        Return a dictionary with history of a particular device attribute.
         
+        Args:
+            header (str): Column header from identifiers CSV.
+                e.g. 'device_os', 'beiwe_version'
+
+        Returns:
+            history (OrderedDict):
+                Keys are ordered timestamps.
+                Values are device attributes observed at those times.        
+        '''        
+        history = OrderedDict()
+        for d in self.identifiers.values():
+            try:
+                history[d['timestamp']] = d[header]
+            except:
+                logger.warning('%s isn\'t a device attribute.' % header)
+        return(history)
+    
+    def get_phone_history(self):
+        '''
+        Get history of phone type.
+        Log a warning if more than one phone type is found.
+        '''        
+        h = self.get_history('device_os')
+        for k in h.keys():
+            if h[k] in ['iPhone OS', 'iOS']:
+                h[k] = 'iPhone'
+            elif h[k] == 'Android':
+                h[k] = 'Android'
+        if len(list(set(h.values()))) > 1:
+            logger.warning('Found multiple phone types.')
+        return(h)        
+    
     def to_csv(self, directory):
         '''
         Write all identifier information to a single csv.
@@ -80,9 +119,7 @@ class UserData():
             Date/time of first and last observations.
             Formatted as '%Y-%m-%d %H_%M_%S'.
         device (DeviceInfo):  Represents contents of the user's identifier files.
-        phone (str): 'iPhone' or 'Android'.
     '''
-
     def __init__(self, user_id):
         self.id = user_id
         self.passive = OrderedDict()
@@ -134,10 +171,16 @@ class UserData():
         # get device
         self.device = DeviceInfo(self.passive['identifiers'])
         # get phone type
-        if self.device.current['device_os'] in ['iPhone OS', 'iOS']:
-            self.phone = 'iPhone'
-        elif self.device.current['device_os'] == 'Android':
-            self.phone = 'Android'
+        
+        
+        
+        #if self.device.current['device_os'] in ['iPhone OS', 'iOS']:
+        #    self.phone = 'iPhone'
+        #elif self.device.current['device_os'] == 'Android':
+        #    self.phone = 'Android'
+
+
+
                
     def to_json(self, directory):
         '''
@@ -152,7 +195,10 @@ class UserData():
                            ('tracking', self.tracking),
                            ('audio', self.audio)])
         write_json(out, self.id + '_merge', directory)
-    
+
+    def __eq__(self, other):
+        return(check_same(self, other, to_check = 'all'))
+
     
 class BeiweProject():
     '''
@@ -311,3 +357,6 @@ class BeiweProject():
         for i in self.user_ids:
             self.data[i].to_json(merge_path)
             self.data[i].device.to_csv(identifiers_path)
+            
+    def __eq__(self, other):
+        return(check_same(self, other, to_check = 'all'))
