@@ -212,7 +212,7 @@ If the study includes audio surveys, the recordings are found in:
 <Beiwe User ID>/audio_recordings/<audio survey identifier>/
 ```
 
-User responses and metadata for tracking surveys are found two locations:
+Raw data for tracking surveys include user responses and metadata.  These are found two locations:
 ```
 <Beiwe User ID>/survey_answers/<tracking survey identifier>/
 <Beiwe User ID>/survey_timings/<tracking survey identifier>/
@@ -233,13 +233,13 @@ Some color maps and functions for generating Color Brewer palettes.
 Functions for handling basic data visualization tasks, such as plotting timestamps and generating axis labels for longitudinal data.
 
 #### `proc_template`
-
+This is is a wrapper for functions used to process Beiwe data.
 
 #### `process`
 The tools in this module assume the Beiwe [file naming conventions](#files) and [directory structure](#directory) that are described in this document.  
 
 #### `time` & `time_constants`
-The `time` module provides functions for working with the various [time formats](#time) found in Beiwe data.  Commonly used timezones and date-time formats are found in `time_constants`.
+The `time` module provides functions for working with the various [time formats](#time) found in Beiwe data.  Commonly used timezones and date-time formats are provided in `time_constants`.
 
 #### `trackers`
 Classes for online calculation of summary statistics during data processing tasks.
@@ -253,12 +253,12 @@ The `configread` sub-package provides classes for representing information in Be
 Review [this section](#configuration) for information about configuration files.
 
 #### Study Attributes
-To ensure compatibility across formats, the `configread` package looks for all known study attributes, regardless of file format.  Therefore, due to differences across configuration file formats, it is not unusual to see many missing values.
+To ensure compatibility across formats, `configread` looks for all known study attributes, regardless of file format.  Therefore, due to differences across configuration file formats, it is not unusual to see many missing values.
 
 Documented study attributes can be found in `study_settings.json` and `survey_settings.json`.  Any undocumented attributes are logged whenever a `BeiweConfig` object is instantiated.
 
 #### Identifiers
-The `configread` package attaches identifiers to each Beiwe survey and question object.  These correspond to the unique identifiers found in raw survey response data, and can be used to query the content of surveys and questions.  
+A `BeiweConfig` instance will attach identifiers to each Beiwe survey and question object.  These correspond to the unique identifiers found in raw survey response data, and can be used to query the content of surveys and questions.  
  
 Each identifier is either the `object_id` or the `_id` assigned to the survey or question, depending on the format of the configuration file.
 
@@ -306,14 +306,14 @@ configuration_documentation_from_<local time>/
 
 The file `warnings.txt` provides a record of any undocumented settings or objects found in the configuration file. A common undocumented object is the "dummy" survey type, which is probably assigned to surveys that have been deleted.
 
-The `records` folder contains everything needed to recreate an identical BeiweConfig instance.  To do this, either (1) provide paths to `raw.json` and `names.json` as input, or (2) just provide a path to the folder labeled with the name of the study.  Note that `raw.json` is just a "pretty-printed" copy of the original Beiwe configuration file.
+The `records` folder contains everything needed to recreate an identical BeiweConfig instance.  To do this, either (1) provide paths to `raw.json` and `names.json` as input, or (2) provide a path to the folder labeled with the name of the study.  Note that `raw.json` is just a "pretty-printed" copy of the original Beiwe configuration file.
 
 Other files with the `.txt` extension contain human-readable summaries of the contents of the Beiwe configuration.  In these files, an attribute that is "Not found" probably belongs to a different format of configuration file.  It is normal to see "Not found" in many places.
 
 #### Naming
-By default, `configread` assigns human-readable names to each study survey and question.  Names are of the form `Survey_01`, `Survey_01_Question_01`, etc.  These names are assigned in the order in which objects appear in the corresponding JSON file, and may not agree with names found on the Beiwe backend.
+By default, `configread` assigns human-readable names to each study survey and question.  Names are of the form `Survey_01`, `Survey_01_Question_01`, etc.  Note that these names are assigned in the order in which objects appear in the corresponding JSON file, and may not agree with names found on the Beiwe backend.
 
-For convenience, it may be desirable to assign a descriptive name to each study survey and survey item.  Names can be exported and reloaded in the future.  See `configread_example.ipynb` for sample code.
+For convenience, it may be desirable to assign a descriptive name to each study survey and survey item.  Assigned names can be exported and reloaded for use in the future.  See `configread_example.ipynb` for sample code.
 
 #### Scoring
 In Beiwe questionnaires (called "tracking surveys"), responses to checkbox and radio button items are assigned a numeric score.  This score is the zero-based index of the response in the corresponding list of answers.  For example, if possible answers are `['High', ''Medium', 'Low']` then the assigned scores are 0, 1, 2.
@@ -321,9 +321,9 @@ In Beiwe questionnaires (called "tracking surveys"), responses to checkbox and r
 #### Limitations & Cautions
 This sub-package does not parse branching logic settings used for conditional delivery of tracking survey items.  Use `TrackingQuestion.logic` to view a question's logic configuration.
 
-Note that only tracking surveys and audio surveys are represented by dedicated classes.  Other survey types (e.g. image surveys) are represented with the generic BeiweSurvey class.
+Note that only tracking surveys and audio surveys are represented by dedicated classes.  Other survey types (e.g. image surveys) are represented with the generic `BeiweSurvey` class.
 
-Lastly, note that comparison of `configread` objects is intended to be somewhat flexible.  This is to accommodate the possibility that the same study configuration may be serialized in different formats.  Therefore, some caution should be used when checking equality.
+Lastly, note that comparison of `configread` objects is intended to be somewhat flexible.  This is to accommodate the possibility that the same study configuration may be duplicated or serialized in different formats.  Therefore, some caution should be used when checking equality.
 
 
 ___
