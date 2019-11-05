@@ -8,14 +8,14 @@ beiwetools
 
 The `beiwetools` package provides classes and functions for working with Beiwe data sets and Beiwe study configurations.  
 
-This document provides a brief description of each sub-package, along with some background about Beiwe configuration files and raw data.
+This document provides a brief description of each sub-package, along with some background about Beiwe studies, configuration files and raw data.
 
 There are four sub-packages:
 
 * `helpers`:  Functions for handling common scenarios, such as converting time formats, organizing Beiwe data files, and plotting timestamps,
 * `configread`:  Tools for querying Beiwe configuration files and generating study documentation,
 * `manage`:  Tools for organizing and summarizing directories of raw Beiwe data,
-* `localize`:  Classes and functions for incorporating users' time zones into the analysis of processed Beiwe data.
+* `localize`:  Classes and functions for incorporating each user's time zone into the analysis of processed Beiwe data.
 
 To install this package with pip:
 
@@ -51,32 +51,34 @@ This is version 0.0.1 of `beiwetools`.  This package was developed with Python 3
 #### Requirements
 Among the package requirements, the following are not in the Python Standard Library:
 
+* `holidays`
 * `pandas`
 * `pytz`
 * `seaborn`
+* `timezonefinder`
 
 #### Compatibility
 The modules in this package were written with the intention of preserving compatibility with previous versions of Python 3.  For example, it is generally desirable to preserve key insertion order when reading JSON files into dictionaries.  Since Python 3.6, dictionaries do preserve insertion order.  However, for compatibility with previous versions, we use ordered dictionaries (`collections.OrderedDict`) instead.
 
-Note that sub-packages are currently collected in a [native namespace package](https://packaging.python.org/guides/packaging-namespace-packages/#native-namespace-packages), which is supported only by Python 3.3 and later.
+Note that sub-packages are currently collected in a [native namespace package](https://packaging.python.org/guides/packaging-namespace-packages/#native-namespace-packages).  This structure is supported only by Python 3.3 and later.
 
 ___
 ## Overview <a name="overview"/>
 
 #### Beiwe Studies
-A *Beiwe study* corresponds to a collection of surveys and device settings.  These study parameters determine the app's behavior when it is installed on a user's phone, including:
+A **Beiwe study** corresponds to a collection of surveys and device settings.  These study parameters determine the app's behavior when it is installed on a user's phone, including:
 
 * How and when surveys are delivered,
 * How often data are uploaded,
 * Which sensors are sampled for passive data collection.
 
-Each Beiwe user is assigned an alphanumeric string (a *user ID*), when he or she is registered in a study.  Each Beiwe study is assigned both a hex-string identifier (*study ID*) and a human-readable name.  
+Each Beiwe user is assigned an alphanumeric string (**user ID**), when he or she is registered in a study.  Each Beiwe study is assigned both a hex-string identifier (**study ID**) and a human-readable name.  
 
 Using the above identifiers, researchers can download raw user data from the Beiwe backend.  This can be done manually (e.g. from `studies.beiwe.org`) or with tools from the `mano` package.
 
 
 #### Configuration Files <a name="configuration"/>
-The parameters of a Beiwe study can be exported to a *configuration file* in JSON format.  Configuration file names may have the following format:
+The parameters of a Beiwe study can be exported to a **configuration file** in JSON format.  Configuration file names may have the following format:
 
 ```
 The_Name_of_the_Study_surveys_and_settings.json
@@ -96,7 +98,7 @@ A configuration file also contains details about the study's **surveys**, such a
 
 Note that configuration files do *not* contain the following information:
 
-* Individual user identifiers,
+* Individual user IDs,
 * Human-readable names for studies, surveys, or other objects.
 
 In this package, lists of attributes found in Beiwe configuration files are provided in two JSON files:
@@ -111,7 +113,7 @@ Note that there are three slightly different formats for configuration files:
 
 * **MongoDB Extended JSON format.** In older Beiwe configuration files, objects are identified only with  an `_id` attribute.  Objects in these configuration files do not have a `deleted` attribute, and in some cases there may be other minor differences across attributes.
 * **Current format V1.**  Since June 2018, Beiwe configuration files identify objects (such as surveys) with both an `id` (integer) and an `object_id` (hex string).  All objects have an additional Boolean attribute `deleted`.
-* **Current format V2.** In 2019, the following device settings were added:
+* **Current format V2.** In 2019, the following device settings were added:  
     `call_clinician_button_enabled`  
     `call_research_assistant_button_enabled`  
     `use_gps_fuzzing`  
@@ -320,13 +322,19 @@ ___
 
 This sub-package provides classes and functions for managing raw Beiwe data.  These tools are intended for use when processing data locally, e.g. on a PC with data that have been downloaded from the Beiwe backend.
 
+#### Device attributes
+The `DeviceInfo` class manages information found in each user's `identifiers` directory.  
+
+A new set of identifiers is created whenever the Beiwe app is installed or re-installed.  These files provide a partial record of changes to each user's device, including phone model, operating system, and Beiwe version.  
+
+Raw data from Android and iPhone devices are formatted differently, so researchers should use caution if data are collected for the same user ID with phones of different types.  In this unusual situation, the user's data should be carefully divided according to phone type and analyzed separately.
+
+#### Raw data registries 
 The `ProjectData` class can handle management of a single raw data directory, as well as merging of multiple raw data directories.  The latter may be useful under some circumstances:
 
 * Raw data from the same study may have been downloaded to multiple locations corresponding to different subsets of users or to different time ranges.  It may be desirable to create a single project that pools all users and time ranges.
 
 * Research participants may be organized into multiple arms, with smartphone data collection in each arm implemented with different Beiwe studies.  (This strategy might be used when different arms receive different surveys.)  In this case, it may be desirable to pool all users for analysis of common data streams and for preservation of blinding.
-
-The `DeviceInfo` class manages information found in each user's `identifiers` directory.  A new set of identifiers is created when the Beiwe app is installed or re-installed, providing a partial record of each user's phone model, operating system, and Beiwe version.  Raw data from Android and iPhone devices are formatted differently, so researchers should use caution if data are collected for the same user ID with phones of different types.  In this unusual situation, the user's data should be carefully divided according to phone type and analyzed separately.
 
 
 ___

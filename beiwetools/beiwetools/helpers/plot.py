@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from .time import to_timestamp, filename_time_format, UTC
 from .colors import *
-#from .classes import ProjectData
 
                     
 def plot_timestamps(ax, timestamp_dictionary, labels = [],

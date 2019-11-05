@@ -1,8 +1,10 @@
 from setuptools import setup, find_namespace_packages
 
-requires = ['pandas',
+requires = ['holidays',
+            'pandas',
             'pytz', 
-            'seaborn']
+            'seaborn',
+            'timezonefinder']
 
 with open('README.md') as f:
     readme = f.read()
