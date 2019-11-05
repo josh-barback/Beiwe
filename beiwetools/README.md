@@ -36,13 +36,12 @@ ___
 1.  [Version Notes](#version)  
 2.  [Overview](#overview)  
 3.  [Time Formats](#time)  
-4.  [File Names & Contents](#files)  
-5.  [Directory Structure](#directory)  
-6.  [`beiwetools.helpers`](#helpers)  
-7.  [`beiwetools.configread`](#configread)  
-8.  [`beiwetools.manage`](#manage)  
-9.  [`beiwetools.localize`](#localize)  
-10.  [Examples](#examples)  
+4.  [Directory Structure](#directory)  
+5.  [`beiwetools.helpers`](#helpers)  
+6.  [`beiwetools.configread`](#configread)  
+7.  [`beiwetools.manage`](#manage)  
+8.  [`beiwetools.localize`](#localize)  
+9.  [Examples](#examples)  
 
 ___
 ## Version Notes <a name="version"/>
@@ -154,9 +153,6 @@ File names or directory names may include the researcher's local date/time, form
 Log files may include the researcher's local date/time formatted as: `%Y-%m-%d %H:%M:%S %Z`.
 
 User's local time
-
-___
-## File Names & Contents <a name="files"/>
 
 
 ___
