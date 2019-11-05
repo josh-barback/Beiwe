@@ -74,7 +74,7 @@ Each Beiwe user is assigned an alphanumeric string (a *user ID*), when he or she
 Using the above identifiers, researchers can download raw user data from the Beiwe backend.  This can be done manually (e.g. from `studies.beiwe.org`) or with tools from the `mano` package.
 
 
-#### <a name="configuration"/>Configuration Files
+#### Configuration Files <a name="configuration"/>
 The parameters of a Beiwe study can be exported to a *configuration file* in JSON format.  Configuration file names may have the following format:
 
 ```
@@ -118,8 +118,7 @@ Note that there are three slightly different formats for configuration files:
 Lastly, note that the Beiwe study identifier that appears in a configuration file may not match the study ID found elsewhere on the Beiwe backend.  (This is a concern only for study IDs.  Configuration files do appear to provide correct identifiers for surveys and questions.)
 
 ___
-<a name="time"/>
-## Time Formats
+## Time Formats <a name="time"/>
 
 Several time formats are used in Beiwe data and configuration files.  With few exceptions, these formats correspond to times in Coordinated Universal Time (UTC).
 
@@ -155,13 +154,11 @@ Log files may include the researcher's local date/time formatted as: `%Y-%m-%d %
 User's local time
 
 ___
-<a name="files"/>
-## File Names & Contents
+## File Names & Contents <a name="files"/>
 
 
 ___
-<a name = "#directory"/>
-## Directory Structure  
+## Directory Structure <a name = "#directory"/>
   
 Raw Beiwe data may be downloaded from the backend and extracted to a directory chosen by the researcher.  The `beiwetools` package assumes the following directory structure:
 
@@ -203,8 +200,7 @@ A user's data directory will also contain one folder for each type of survey tha
 
 
 ___
-<a name="names"/>
-## Variable Names
+## Variable Names <a name="names"/>
 
 
 In the `beiwetools` package, some commonly used variable names are the following:
@@ -220,8 +216,7 @@ study ID
 time
 
 ___
-<a name="helpers"/>
-## `beiwetools.helpers`
+## `beiwetools.helpers` <a name="helpers"/>
 
 This sub-package provides classes and functions that are used throughout `beiwetools` and also by Beiwe reporting packages (`accrep`, 'gpsrep', `survrep`).  Below is an overview of each module.
 
@@ -254,8 +249,7 @@ The `time` module provides functions for working with the various [time formats]
 
 
 ___
-<a name="configread"/>
-## `beiwetools.configread`
+## `beiwetools.configread` <a name="configread"/>
 
 The `configread` sub-package provides classes for representing information in Beiwe configuration files, with methods for generating documentation.  These modules have been tested on 32 configuration files from nine Beiwe studies.
 
@@ -336,8 +330,7 @@ Lastly, note that comparison of `configread` objects is intended to be somewhat 
 
 
 ___
-<a name="manage"/>
-## `beiwetools.manage`
+## `beiwetools.manage` <a name="manage"/>
 
 
 Specifically for working locally (e.g. on a PC) with raw Beiwe data that has been downloaded from the backend.
@@ -349,8 +342,7 @@ This sub-package provides classes and functions for managing raw Beiwe data.  Th
 
 
 ___
-<a name="localize"/>
-## `beiwetools.localize`
+## `beiwetools.localize` <a name="localize"/>
 
 This sub-package provides tools for localizing processed Beiwe data to the time zone of the user.
 
@@ -371,8 +363,7 @@ Some functions for loading fitabase data sets into a `ProcData` object.
 
 
 ___
-<a name="examples"/>
-## Examples
+## Examples <a name="examples"/>
 
  * `configread_example.ipynb`
 
@@ -380,8 +371,7 @@ Code examples (iPython notebooks and Python scripts) are located in the `example
 
 
 ___
-<a name="cautions"/>
-## General Cautions
+## General Cautions <a name="cautions"/>
 
 #### Compatibility
 The modules in this package were written with the intention of preserving compatibility with previous versions of Python.  For example, it is generally desirable to preserve key insertion order when reading JSON files into dictionaries.  Since Python 3.6, dictionaries do preserve insertion order.  However, for compatibility with previous versions, we use ordered dictionaries (`collections.OrderedDict`) instead.
