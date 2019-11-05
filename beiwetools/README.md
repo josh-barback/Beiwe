@@ -128,14 +128,13 @@ Several time formats are used in Beiwe data and configuration files.  With few e
 #### Timestamps
 In raw Beiwe data, each observation is associated with a timestamp corresponding to the number of milliseconds that have elapsed since the Unix epoch, January 1, 1970 00:00:00 Coordinated Universal Time (UTC).
 
-#### File Names
-A raw Beiwe data set contains `csv` files organized according to the directory structure described in the following section.  Each file corresponds to one hour of observations.
-
-  Each file is named  ...
-
 #### Raw Data
+A raw Beiwe data set contains `csv` files organized according to the directory structure described [below](#directory).  Each file corresponds to one hour of observations.  If no file exists for a particular hour, then no data were observed from that stream during this time.
 
-column names, UTC column, filenames
+The name of each file is the UTC time corresponding to the beginning of the hour in which data were collected:  `<%Y-%m-%d %H_%M_%S>.csv`
+
+Most raw data files have columns labeled `timestamp` and `UTC time`.  These contain the millisecond timestamp and human-readable UTC time (`%Y-%m-%dT%H:%M:%S.%f`) for the observations in the corresponding row.
+
 
 #### Configuration Files
 Each survey in a Beiwe study has a `timings` attribute that indicates which days and times the survey is delivered.  This attribute is a list of seven lists of integers.  For example:
@@ -152,7 +151,7 @@ Some modules in this package report local times for various purposes:
 
 * File names or directory names may include the researcher's local date/time, formatted as: `%Y-%m-%d_%H:%M:%S_%Z`. 
 
-* Log files may include the researcher's local date/time formatted as: `%Y-%m-%d %H:%M:%S %Z`.
+* Log files may include the researcher's local date/time, formatted as: `%Y-%m-%d %H:%M:%S %Z`.
 
 * Except for timestamps, the `localize` sub-package always reports date/times in the user's local timezone (which may change during the follow-up period).
 
