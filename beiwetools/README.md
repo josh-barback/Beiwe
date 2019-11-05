@@ -306,7 +306,7 @@ configuration_documentation_from_<local time>/
 
 The file `warnings.txt` provides a record of any undocumented settings or objects found in the configuration file. A common undocumented object is the "dummy" survey type, which is probably assigned to surveys that have been deleted.
 
-The `records` folder contains everything needed to recreate an identical BeiweConfig instance.  To do this, either (1) provide paths to `raw.json` and `names.json` as input, or (2) provide a path to the folder labeled with the name of the study.  Note that `raw.json` is just a "pretty-printed" copy of the original Beiwe configuration file.
+The `records` folder contains everything needed to recreate an identical `BeiweConfig` instance.  To do this, either (1) provide paths to `raw.json` and `names.json` as input, or (2) provide a path to the folder labeled with the name of the study.  Note that `raw.json` is just a "pretty-printed" copy of the original Beiwe configuration file.
 
 Other files with the `.txt` extension contain human-readable summaries of the contents of the Beiwe configuration.  In these files, an attribute that is "Not found" probably belongs to a different format of configuration file.  It is normal to see "Not found" in many places.
 
@@ -343,7 +343,7 @@ The `ProjectData` class can handle management of a single raw data directory, as
 
 * Raw data from the same study may have been downloaded to multiple locations corresponding to different subsets of users or to different time ranges.  It may be desirable to create a single project that pools all users and time ranges.
 
-* Research participants may be organized into multiple arms, with smartphone data collection in each arm implemented with different Beiwe studies.  (This strategy might be used when different arms receive different surveys.)  In this case, it may be desirable to pool all users for analysis of common data streams and for preservation of blinding.
+* Research participants may be organized into multiple arms, with smartphone data collection in each arm implemented with a different Beiwe study.  (This strategy might be used when different arms receive different surveys.)  In this case, it may be desirable to pool all users for analysis of common data streams and for preservation of blinding.
 
 
 ___
@@ -351,19 +351,14 @@ ___
 
 This sub-package provides tools for localizing processed Beiwe data to the time zone of the user.
 
-#### `classes`
-
-The `Localize` class identifies timezones for timestamps, given a dictionary of a user's timezone transitions generated with the `gpsrep` package.  
+The `Localize` class is used to identify timezones for timestamps, given a dictionary of a user's timezone transitions generated with the `gpsrep` package.  
 
 The `ProcData` class provides a framework for partitioning processed data into 24-hour periods that are consistent with the user's local time.  Variables of interest can be "loaded" into a `ProcData` object as 2-D arrays.  Arrays of processed data can then be exported to text files or reshaped into a feature matrix.
 
-#### `plot`
+Additional modules:
 
-This module provides functions for generating simple visualizations of longitudinal data from `ProcData` objects.
-
-#### `fitabase`
-
-Some functions for loading fitabase data sets into a `ProcData` object.
+* `plot`: Some functions for generating simple visualizations of longitudinal data from `ProcData` objects,
+* `fitabase`: Functions for loading fitabase data sets into a `ProcData` object.
 
 
 ___
@@ -379,12 +374,9 @@ The example data were collected from five different Beiwe studies.  The correspo
 
 The following code samples (iPython notebooks) are also located in the `examples` folder:
 
- * `configread_example.ipynb`
- * `manage_example.ipynb`
-
-
-
-
-
-
-
+* `configread_example.ipynb`
+* `manage_example.ipynb`
+* `survrep_example.ipynb`
+* `gpsrep_example.ipynb`
+* `accrep_example.ipynb`
+* `localize_example.ipynb` 
