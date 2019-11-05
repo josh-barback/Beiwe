@@ -36,3 +36,31 @@ def to_plot(passive = True, tracking = True, audio = True):
     for k in keys_to_delete:
         del work_dictionary[k]
     return(work_dictionary)
+    
+    
+    
+
+def to_plot(self, passive = True, tracking = True, audio = True):
+        '''
+        Get inputs for plot_raw_survey.
+        
+        Args:
+            None
+            
+        Returns:
+            all_types (list):  All available data types across all users.
+        '''
+        all_types = []
+        if passive:
+            all_types += self.passive
+        if tracking:
+            sa = [i + '_survey_answers' for i in self.tracking]
+            st = [i + '_survey_timings' for i in self.tracking]
+            all_types += sorted(sa + st)
+        if audio:
+            all_types += [i + '_audio' for i in self.audio]
+        # On rare occasions there may be a tracking survey folder called "None."
+        # May occur for a deleted survey?
+        all_types = [t for t in all_types if not 'None' in t]      
+        return(all_types)
+
