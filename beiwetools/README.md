@@ -131,7 +131,8 @@ In raw Beiwe data, each observation is associated with a timestamp corresponding
 #### Raw Data
 A raw Beiwe data set contains `csv` files organized according to the directory structure described [below](#directory).  Each file corresponds to one hour of observations.  If no file exists for a particular hour, then no data were observed from that stream during this time.
 
-The name of each file is the UTC time corresponding to the beginning of the hour in which data were collected:  `<%Y-%m-%d %H_%M_%S>.csv`
+The name of each file is the UTC time corresponding to the beginning of the hour in which data were collected.  The filename format is:  
+`<%Y-%m-%d %H_%M_%S>.csv`
 
 Most raw data files have columns labeled `timestamp` and `UTC time`.  These contain the millisecond timestamp and human-readable UTC time (`%Y-%m-%dT%H:%M:%S.%f`) for the observations in the corresponding row.
 
@@ -149,9 +150,9 @@ Position in the top list indicates day of the week, starting with Sunday.  (Note
 #### Local Time
 Some modules in this package report local times for various purposes:
 
-* File names or directory names may include the researcher's local date/time, formatted as: `%Y-%m-%d_%H:%M:%S_%Z`. 
+* File names or directory names may include the researcher's local date/time, formatted as: `%Y-%m-%d_%H:%M:%S_%Z`
 
-* Log files may include the researcher's local date/time, formatted as: `%Y-%m-%d %H:%M:%S %Z`.
+* Log files may include the researcher's local date/time, formatted as: `%Y-%m-%d %H:%M:%S %Z`
 
 * Except for timestamps, the `localize` sub-package always reports date/times in the user's local timezone (which may change during the follow-up period).
 
@@ -181,13 +182,18 @@ Raw Beiwe data may be downloaded from the backend and extracted to a directory c
 			.
 
 		survey_answers/
-			<>/
-			<>/
+			<tracking survey identifier #1>/
+			<tracking survey identifier #2>/
 			.
 			.
 			.
 
 		survey_timings/
+			<tracking survey identifier #1>/
+			<tracking survey identifier #2>/
+			.
+			.
+			.
 
 	<Beiwe User ID #2>/
 		.
@@ -195,18 +201,22 @@ Raw Beiwe data may be downloaded from the backend and extracted to a directory c
 		.
 ```
 
-Note that `<raw data directory>` is typically a location chosen by the researcher.  The remainder of the directory structure is determined by the study's specific data collection settings.
+Note that `<raw data directory>` is typically a location chosen by the researcher.  The directory contents are determined by the study's specific data collection settings.
 
 Each user's data are found in a folder labeled with the user's Beiwe ID, which is an alphanumeric string.  Multiple users enrolled in the same Beiwe study may have data folders in the same raw data directory.
 
-Each user's data directory will include a folder labeled `identifiers`; this contains files with records of the user's device.  
+Each user's data directory will include a folder labeled `identifiers`; this contains files with records of the user's device.  Passive data folder names may be `accelerometer`, `calls`, `gps`, etc.
 
-Passive data folder names may be `accelerometer`, `calls`, `gps`, etc.
+If the study includes audio surveys, the recordings are found in:
+```
+<Beiwe User ID>/audio_recordings/<audio survey identifier>/
+```
 
-If the study includes audio surveys, the recordings are found in 
-
-Raw data from tracking surveys are found two locations.
-
+User responses and metadata for tracking surveys are found two locations:
+```
+<Beiwe User ID>/survey_answers/<tracking survey identifier>/
+<Beiwe User ID>/survey_timings/<tracking survey identifier>/
+```
 
 ___
 ## `beiwetools.helpers` <a name="helpers"/>
