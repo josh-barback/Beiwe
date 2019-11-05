@@ -38,26 +38,28 @@ ___
 3.  [Time Formats](#time)  
 4.  [File Names & Contents](#files)  
 5.  [Directory Structure](#directory)  
-6.  [Variable Names](#names)  
-7.  [`beiwetools.helpers`](#helpers)  
-8.  [`beiwetools.configread`](#configread)  
-9.  [`beiwetools.manage`](#manage)  
-10.  [`beiwetools.localize`](#localize)  
-11.  [Examples](#examples)  
-12.  [General Cautions](#cautions)  
-
+6.  [`beiwetools.helpers`](#helpers)  
+7.  [`beiwetools.configread`](#configread)  
+8.  [`beiwetools.manage`](#manage)  
+9.  [`beiwetools.localize`](#localize)  
+10.  [Examples](#examples)  
 
 ___
 ## Version Notes <a name="version"/>
 
 This is version 0.0.1 of `beiwetools`.  This package was developed with Python 3.7.4 on PCs running Manjaro Illyria 18.0.4.
 
+#### Requirements
 Among the package requirements, the following are not in the Python Standard Library:
 
 * `pandas`
 * `pytz`
 * `seaborn`
 
+#### Compatibility
+The modules in this package were written with the intention of preserving compatibility with previous versions of Python 3.  For example, it is generally desirable to preserve key insertion order when reading JSON files into dictionaries.  Since Python 3.6, dictionaries do preserve insertion order.  However, for compatibility with previous versions, we use ordered dictionaries (`collections.OrderedDict`) instead.
+
+Note that sub-packages are currently collected in a [native namespace package](https://packaging.python.org/guides/packaging-namespace-packages/#native-namespace-packages), which is supported only by Python 3.3 and later.
 
 ___
 ## Overview <a name="overview"/>
@@ -158,7 +160,7 @@ ___
 
 
 ___
-## Directory Structure <a name = "#directory"/>
+## Directory Structure <a name = "directory"/>
   
 Raw Beiwe data may be downloaded from the backend and extracted to a directory chosen by the researcher.  The `beiwetools` package assumes the following directory structure:
 
@@ -197,23 +199,6 @@ Each user's data are found in a folder labeled with the user's Beiwe ID, which i
 Each user's data directory will include a folder labeled `identifiers`; this contains files with records of the user's device.  Additional passive data folder names may be `accelerometer`, `calls`, `gps`, etc.
 
 A user's data directory will also contain one folder for each type of survey that has been delivered.  Possible folder names are:
-
-
-___
-## Variable Names <a name="names"/>
-
-
-In the `beiwetools` package, some commonly used variable names are the following:
-
-* `raw_dir`: Path to the raw data directory chosen by the researcher, described in the previous section.
-*
-*
-*
-
-user ID
-study ID
-
-time
 
 ___
 ## `beiwetools.helpers` <a name="helpers"/>
@@ -332,13 +317,20 @@ Lastly, note that comparison of `configread` objects is intended to be somewhat 
 ___
 ## `beiwetools.manage` <a name="manage"/>
 
-
-Specifically for working locally (e.g. on a PC) with raw Beiwe data that has been downloaded from the backend.
-
-* Managing directories of raw data,
-
-
 This sub-package provides classes and functions for managing raw Beiwe data.  These tools are intended for use when processing data locally, e.g. on a PC with data that have been downloaded from the Beiwe backend.
+
+The `DeviceInfo` class 
+
+
+
+The `ProjectData` class can handle management of a single raw data directory, as well as management of multiple directories as described above.
+
+
+In some cases, researchers may wish to merge Beiwe data from multiple raw data directories.  For example:
+
+* Raw data from the same study have been downloaded to multiple locations corresponding to different subsets of users or to different time ranges.  It may be desirable to create a single project that pools all users and time ranges.
+
+* Research participants are organized into multiple arms, with smartphone data collection in each arm implemented with different Beiwe studies.  (This strategy may be used when different arms receive different surveys.)  In this case, it may be desirable to pool all users for analysis of common data streams and for preservation of blinding.
 
 
 ___
@@ -365,17 +357,14 @@ Some functions for loading fitabase data sets into a `ProcData` object.
 ___
 ## Examples <a name="examples"/>
 
+Code samples (iPython notebooks) are located in the `examples` folder:
+
  * `configread_example.ipynb`
+ * `manage_example.ipynb`
 
-Code examples (iPython notebooks and Python scripts) are located in the `examples` folder.
 
 
-___
-## General Cautions <a name="cautions"/>
 
-#### Compatibility
-The modules in this package were written with the intention of preserving compatibility with previous versions of Python.  For example, it is generally desirable to preserve key insertion order when reading JSON files into dictionaries.  Since Python 3.6, dictionaries do preserve insertion order.  However, for compatibility with previous versions, we use ordered dictionaries (`collections.OrderedDict`) instead.
 
-Note that sub-packages are currently collected in a [native namespace package](https://packaging.python.org/guides/packaging-namespace-packages/#native-namespace-packages), which is supported only by Python 3.3 and later.
 
 

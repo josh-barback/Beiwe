@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 class BeiweConfig():
     """
-    Class for representing a Beiwe study configuration as encoded in the corresponding JSON file.
+    Class for representing a Beiwe study configuration as encoded in a JSON file.
 
     Args:
         path (str): Path to the JSON configuration file.
@@ -27,7 +27,8 @@ class BeiweConfig():
 
     Attributes:
         warnings (list): Records of unknown settings or object types, if any.
-        name (str): An additional identifier for the study, such as the name of the configuration file.
+        name (str): 
+            An additional identifier for the study, such as the name of the configuration file.
         paths (str): Paths to the files used to create the BeiweConfig object.
         name_assignments (OrderedDict): 
             Keys are object identifiers, values are readable names.
@@ -36,13 +37,14 @@ class BeiweConfig():
                 "Survey_1_Question_1", "Survey_1_Question_2", etc.
         name_lookup (dict): 
             If assigned names are all unique, keys are names and values are identifiers.
+            This dictionary is just for convenience, to find an identifier given the name of a survey or question.
         default_names (bool): 
             Whether or not surveys & questions are assigned default names.
             True if configuration is loaded with names_path = None.
             False if:
-                update_names() method is called,
-                configuration is loaded from an export,
-                or configuration is loaded with a name assignment dictionary.
+                Update_names() method is called,
+                The configuration is loaded from an export,
+                Or configuration is loaded with a name assignment dictionary.
         raw (OrderedDict): The deserialized configuration file.
         extended_format (bool): True if the JSON file uses MongoDB Extended JSON format, False otherwise.
         identifier (int or str): 

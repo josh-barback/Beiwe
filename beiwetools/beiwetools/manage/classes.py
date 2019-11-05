@@ -6,37 +6,10 @@ import logging
 from collections import OrderedDict
 from beiwetools.helpers.time import to_timestamp, UTC, filename_time_format
 from beiwetools.helpers.process import make_registry
-from beiwetools.helpers.functions import sort_by, read_json, write_json
-from beiwetools.helpers.functions import setup_directories, setup_csv, write_to_csv
-
+from beiwetools.helpers.functions import (sort_by, read_json, write_json, check_same,
+                                          setup_directories, setup_csv, write_to_csv)
 
 logger = logging.getLogger(__name__)
-
-
-#def same_beiwe_object(o1, o2):    
-#    if type(o1) == type(o2):
-#        if type(o1) is DeviceInfo:
-#            return(o1.identifiers == o2.identifiers and
-#                   o1.current == o2.current)
-#        elif type(o1) is UserData:
-#            return(o1.id == o2.id and
-#                   o1.passive == o2.passive and
-#                   o1.tracking == o2.tracking and
-#                   o1.audio == o2.audio and
-#                   o1.first == o2.first and
-#                   o1.last == o2.last and
-#                   same_beiwe_object(o1.device, o2.device) and
-#                   o1.phone == o2.phone)            
-#        elif type(o2) is ProjectData:
-#            return(o1.user_ids == o2.user_ids and
-#                   all([same_beiwe_object(o1.data[i], o2.data[i]) for i in o1.user_ids]) and
-#                   o1.first == o2.first and
-#                   o1.last == o2.last and
-#                   o1.iPhone_users == o2.iPhone_users and
-#                   o1.Android_users == o2.Android_users and
-#                   o1.name_assignments == o2.name_assignments)                    
-#    else:
-#        return(False)
 
 
 class DeviceInfo():
@@ -83,6 +56,9 @@ class DeviceInfo():
         for f in self.identifiers.keys():  
             line = [f] + list(self.identifiers[f].values())
             write_to_csv(path, line)
+            
+    def __eq__(self, other):
+        return(check_same(self, other, to_check = 'all'))
 
 
 class UserData():
@@ -105,8 +81,8 @@ class UserData():
             Formatted as '%Y-%m-%d %H_%M_%S'.
         device (DeviceInfo):  Represents contents of the user's identifier files.
         phone (str): 'iPhone' or 'Android'.
-        
     '''
+
     def __init__(self, user_id):
         self.id = user_id
         self.passive = OrderedDict()
@@ -162,42 +138,6 @@ class UserData():
             self.phone = 'iPhone'
         elif self.device.current['device_os'] == 'Android':
             self.phone = 'Android'
-    
-    def to_plot(self, passive = True, tracking = True, audio = True):
-        '''
-        Get inputs for plot_raw_survey.
-        
-        Args:
-            None
-            
-        Returns:
-            work_dictionary (OrderedDict):  Keys are data types.
-                Values are lists of timestamps of when that data type was collected.
-        '''
-        work_dictionary = OrderedDict()
-        if passive:
-            work_dictionary.update(self.passive)
-        if tracking:
-            #work_dictionary.update(flatten_nested_dictionaries(self.tracking))
-            pass
-            
-        
-            # fix this
-        
-        
-        if audio:
-            a = OrderedDict(zip([k + '_audio' for k in self.audio.keys()], self.audio.values()))
-            work_dictionary.update(a)
-        for k in work_dictionary.keys():
-            datetimes = [os.path.basename(p).split('.')[0] for p in work_dictionary[k]]
-            timestamps = [to_timestamp(h, from_format = filename_time_format, from_tz = UTC) for h in datetimes]        
-            work_dictionary[k] = timestamps
-        # On rare occasions there may be a tracking survey folder called "None."
-        # May occur for a deleted survey?
-        keys_to_delete = [k for k in work_dictionary.keys() if 'None' in k]    
-        for k in keys_to_delete:
-            del work_dictionary[k]
-        return(work_dictionary)
                
     def to_json(self, directory):
         '''
@@ -350,7 +290,6 @@ class BeiweProject():
         # May occur for a deleted survey?
         all_types = [t for t in all_types if not 'None' in t]      
         return(all_types)
-
 
     def export(self, name, directory):
         '''
