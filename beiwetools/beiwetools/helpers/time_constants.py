@@ -20,11 +20,12 @@ year_ms =  365*day_ms
 day_order = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
 # time formats
-data_time_format     = '%Y-%m-%dT%H:%M:%S.%f'
-filename_time_format = '%Y-%m-%d %H_%M_%S'
+data_time_format     = '%Y-%m-%dT%H:%M:%S.%f' # used in raw Beiwe data
+filename_time_format = '%Y-%m-%d %H_%M_%S'    # used in raw Beiwe file names
 date_only = '%Y-%m-%d'
 time_only = '%H:%M:%S'
 timezone_only = '%Z'
+date_time_format  = ' '.join([date_only, time_only]) 
 local_time_format = ' '.join([date_only, time_only, timezone_only])
 
 # commonly used time zones

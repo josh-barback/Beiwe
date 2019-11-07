@@ -72,6 +72,25 @@ def convert_seconds(s):
 	return(time)
 
 
+def reformat_datetime(time, from_format, to_format):
+    '''
+    Change the format of a data/time string.    
+
+	Args:
+		time (str):  A human-readable date/time string.
+		from_format (str):  
+            The format of time, expressed using directives from the datetime package.
+        to_format (str): 
+            Time format to convert to.
+            
+    Returns:
+        reformat (str): Date/time string in to_format.
+    '''
+    x = datetime.datetime.strptime(time, from_format)
+    reformat = x.strftime(to_format)
+    return(reformat)
+
+
 def to_timestamp(time, from_format, from_tz = UTC):
 	'''
 	Convert a date/time string to a timestamp.
