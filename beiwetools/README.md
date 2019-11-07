@@ -8,7 +8,7 @@ beiwetools
 
 The `beiwetools` package provides classes and functions for working with Beiwe data sets and Beiwe study configurations.  
 
-This document gives a brief description of each sub-package, along with some background about Beiwe studies, configuration files and raw data.  The [Maintenance](#maintenance) section provides some guidelines for updating this package.
+This document gives a brief description of each sub-package, along with some background about Beiwe studies, configuration files and raw data.  Some guidelines for maintaining this package can be found [here](#maintenance).
 
 There are four sub-packages:
 
@@ -27,6 +27,7 @@ Example imports:
 
 ```python
 import beiwetools.configread as configread
+from beiwetools.helpers import Timer, sort_by
 from beiwetools.helpers.time import to_timestamp
 ```
 
