@@ -409,7 +409,7 @@ Classes for survey questions derive from the parent class:   `configread.questio
 
 When defining a new question type, it's probably enough to just define the `get_other_content()` method, which determines the specific attributes of the question type and how those attributes are printed to a summary.  
 
-For examples, see:   
+For examples, see: 
 `configread.questions.RadioButton`  
 `configread.questions.Slider`  
 
@@ -421,15 +421,14 @@ To implement a new survey type:
 1. Add an entry for the new survey type in `configread/study_settings.json`.  The key can be something like `<survey_type>_settings` and the value is a list of attributes for the survey type.
 2. Define a class for the new survey that inherits from `configread.surveys.BeiweSurvey`.  Re-define `__init__()` to indicate where the survey should be documented.
 If necessary, re-define the following methods:  
-`get_settings()`: Which survey settings to look for in the configuration file.
-`get_content()`: What are the survey attributes, how should attributes be printed to a summary, and which attributes are used for object comparison.  
-`update_names()`: How to rename the survey and nested objects.  Only redefine this method if the new survey has named attributes (such as question objects).
+    * `get_settings()`: Which survey settings to look for in the configuration file.
+    * `get_content()`: What are the survey attributes, how should attributes be printed to a summary, and which attributes are used for object comparison.  
+    * `update_names()`: How to rename the survey and nested objects.  Only redefine this method if the new survey has named attributes (such as question objects).
 
 3. Add the class to this dictionary: `configread.surveys.survey_classes`.
 
+4. Identify the output folder(s) for raw data from the new survey type and update `beiwetools.manage.functions.survey_output'.
 
-4. Add the 
-
-
-5. Verify that `beiwetools.manage` correctly handles registries of raw data from the new survey type.  
+5. Verify that `beiwetools.manage.BeiweProject` correctly handles registries of raw data from the new survey type.  This should not be a problem if the new survey delivers data to the usual location:  
+`<raw data directory>/<Beiwe User ID>/<survey type>/<survey identifier>/`
 
