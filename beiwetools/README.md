@@ -8,7 +8,7 @@ beiwetools
 
 The `beiwetools` package provides classes and functions for working with Beiwe data sets and Beiwe study configurations.  
 
-This document provides a brief description of each sub-package, along with some background about Beiwe studies, configuration files and raw data.
+This document gives a brief description of each sub-package, along with some background about Beiwe studies, configuration files and raw data.  The [Maintenance](#maintenance) section provides some guidelines for updating this package.
 
 There are four sub-packages:
 
@@ -41,7 +41,8 @@ ___
 6.  [`beiwetools.configread`](#configread)  
 7.  [`beiwetools.manage`](#manage)  
 8.  [`beiwetools.localize`](#localize)  
-9.  [Examples](#examples)  
+9.  [Examples](#examples)
+10. [Maintenance](#maintenance)
 
 ___
 ## Version Notes <a name="version"/>
@@ -109,7 +110,7 @@ In this package, lists of attributes found in Beiwe configuration files are prov
 	survey_settings.json	
 ```
 
-Note that there are three slightly different formats for configuration files:
+<a name="format"/>Note that there are three slightly different formats for configuration files:
 
 * **MongoDB Extended JSON format.** In older Beiwe configuration files, objects are identified only with  an `_id` attribute.  Objects in these configuration files do not have a `deleted` attribute, and in some cases there may be other minor differences across attributes.
 * **Current format V1.**  Since June 2018, Beiwe configuration files identify objects (such as surveys) with both an `id` (integer) and an `object_id` (hex string).  All objects have an additional Boolean attribute `deleted`.
@@ -154,7 +155,10 @@ Some modules in this package report local times for various purposes:
 
 * Log files may include the researcher's local date/time, formatted as: `%Y-%m-%d %H:%M:%S %Z`
 
-* Except for timestamps, the `localize` sub-package always reports date/times in the user's local timezone (which may change during the follow-up period).
+* Except for timestamps, the `localize` sub-package always reports date/times in the user's local timezone (which may change during the follow-up period).  Formats are:  
+`'%Y-%m-%d'`  
+`'%H:%M:%S'`  
+`'%Y-%m-%d %H:%M:%S'`  
 
 
 ___
@@ -207,16 +211,16 @@ Each user's data are found in a folder labeled with the user's Beiwe ID, which i
 
 Each user's data directory will include a folder labeled `identifiers`; this contains files with records of the user's device.  Passive data folder names may be `accelerometer`, `calls`, `gps`, etc.
 
-If the study includes audio surveys, the recordings are found in:
-```
-<Beiwe User ID>/audio_recordings/<audio survey identifier>/
-```
+Raw survey data are organized as follows:
 
-Raw data for tracking surveys include user responses and metadata.  These are found two locations:
-```
-<Beiwe User ID>/survey_answers/<tracking survey identifier>/
-<Beiwe User ID>/survey_timings/<tracking survey identifier>/
-```
+* Audio survey recordings:  
+`<Beiwe User ID>/audio_recordings/<audio survey identifier>/`
+
+* Item responses from tracking surveys:  
+`<Beiwe User ID>/survey_answers/<tracking survey identifier>/`
+
+* Survey metadata:
+`<Beiwe User ID>/survey_timings/<tracking survey identifier>/`
 
 ___
 ## `beiwetools.helpers` <a name="helpers"/>
@@ -255,7 +259,7 @@ Review [this section](#configuration) for information about configuration files.
 #### Study Attributes
 To ensure compatibility across formats, `configread` looks for all known study attributes, regardless of file format.  Therefore, due to differences across configuration file formats, it is not unusual to see many missing values.
 
-Documented study attributes can be found in `study_settings.json` and `survey_settings.json`.  Any undocumented attributes are logged whenever a `BeiweConfig` object is instantiated.
+Documented study attributes can be found in `study_settings.json` and `survey_settings.json`.  Any undocumented attributes are logged when a configuration file is read into a `BeiweConfig` instance.
 
 #### Identifiers
 A `BeiweConfig` instance will attach identifiers to each Beiwe survey and question object.  These correspond to the unique identifiers found in raw survey response data, and can be used to query the content of surveys and questions.  
@@ -263,7 +267,7 @@ A `BeiweConfig` instance will attach identifiers to each Beiwe survey and questi
 Each identifier is either the `object_id` or the `_id` assigned to the survey or question, depending on the format of the configuration file.
 
 #### Study Documentation
-Use `BeiweConfig.export()` to generate configuration documentation.  Documentation from a `BeiweConfig` instance is organized as follows:
+The `export()` method generates configuration documentation for a `BeiweConfig` object.  Documentation from a `BeiweConfig` instance is organized as follows:
 
 ```
 configuration_documentation_from_<local time>/
@@ -311,7 +315,7 @@ The `records` folder contains everything needed to recreate an identical `BeiweC
 Other files with the `.txt` extension contain human-readable summaries of the contents of the Beiwe configuration.  In these files, an attribute that is "Not found" probably belongs to a different format of configuration file.  It is normal to see "Not found" in many places.
 
 #### Naming
-By default, `configread` assigns human-readable names to each study survey and question.  Names are of the form `Survey_01`, `Survey_01_Question_01`, etc.  Note that these names are assigned in the order in which objects appear in the corresponding JSON file, and may not agree with names found on the Beiwe backend.
+By default, `configread` assigns human-readable names to each study survey and question.  Default names are of the form `Survey_01`, `Survey_01_Question_01`, etc.  Note that these names are assigned in the order in which objects appear in the corresponding JSON file, and may not agree with names found on the Beiwe backend.
 
 For convenience, it may be desirable to assign a descriptive name to each study survey and survey item.  Assigned names can be exported and reloaded for use in the future.  See `configread_example.ipynb` for sample code.
 
@@ -336,7 +340,7 @@ The `DeviceInfo` class manages information found in each user's `identifiers` di
 
 A new set of identifiers is created whenever the Beiwe app is installed or re-installed.  These files provide a partial record of changes to each user's device, including phone model, operating system, and Beiwe version.  
 
-Raw data from Android and iPhone devices are formatted differently, so researchers should use caution if data are collected for the same user ID with phones of different types.  In this unusual situation, the user's data should be carefully divided according to phone type and analyzed separately.
+Certain raw data from Android and iPhone devices are formatted differently, so researchers should use caution if data are collected for the same user ID with phones of different types.  In this unusual situation, the user's data should be carefully divided according to phone type and analyzed separately.
 
 #### Raw data registries 
 The `ProjectData` class can handle management of a single raw data directory, as well as merging of multiple raw data directories.  The latter may be useful under some circumstances:
@@ -345,6 +349,7 @@ The `ProjectData` class can handle management of a single raw data directory, as
 
 * Research participants may be organized into multiple arms, with smartphone data collection in each arm implemented with a different Beiwe study.  (This strategy might be used when different arms receive different surveys.)  In this case, it may be desirable to pool all users for analysis of common data streams and for preservation of blinding.
 
+If a user's follow-up data must be divided into several epochs, this can be accomplished with multiple `ProjectData` objects.  For example, if a user switched from an iPhone to an Android phone, create three projects: two for managing data types that differ across platforms (e.g. tracking surveys and accelerometer) and the third for managing data types that do not differ.
 
 ___
 ## `beiwetools.localize` <a name="localize"/>
@@ -380,3 +385,51 @@ The following code samples (iPython notebooks) are also located in the `examples
 * `gpsrep_example.ipynb`
 * `accrep_example.ipynb`
 * `localize_example.ipynb` 
+
+___
+## Maintenance <a name="maintenance"/>
+
+Future updates and improvements to the Beiwe platform may require some changes to this package.  
+
+In general, new or undocumented study settings and study objects are flagged in several ways:
+
+* With `logging` warnings,
+* In the `warnings` attribure of a `BeiweConfig` instance,
+* In the `warnings.txt` file generated by `BeiweConfig`'s `export()` method.
+
+Note that an unknown setting can still be queried with `BeiweConfig.settings.other`, and an unknown survey will be represented as a generic `BeiweSurvey`.  Documentation will be generated in the "Other/Unknown Settings" section of `general_settings.txt` and in the `other_surveys` folder, respectively.  
+
+Below are some guidelines for updating this package to accommodate new settings and objects.  After making changes, edit this file (`beiwetools/README.md`) with notes [here](#format) and elsewhere as needed.
+
+#### New study settings
+Study settings are organized alphabetically under several headings.  Documented settings are found in `configread/study_settings.json`.  The headings are arbitrary, so a new setting key can be added to this file wherever it fits best.
+
+#### New tracking question type
+Classes for survey questions derive from the parent class:   `configread.questions.TrackingQuestion`
+
+When defining a new question type, it's probably enough to just define the `get_other_content()` method, which determines the specific attributes of the question type and how those attributes are printed to a summary.  
+
+For examples, see:   
+`configread.questions.RadioButton`  
+`configread.questions.Slider`  
+
+After creating the class, add it to this dictionary:   `configread.questions.tracking_questions`
+
+#### New survey type
+To implement a new survey type:
+
+1. Add an entry for the new survey type in `configread/study_settings.json`.  The key can be something like `<survey_type>_settings` and the value is a list of attributes for the survey type.
+2. Define a class for the new survey that inherits from `configread.surveys.BeiweSurvey`.  Re-define `__init__()` to indicate where the survey should be documented.
+If necessary, re-define the following methods:  
+`get_settings()`: Which survey settings to look for in the configuration file.
+`get_content()`: What are the survey attributes, how should attributes be printed to a summary, and which attributes are used for object comparison.  
+`update_names()`: How to rename the survey and nested objects.  Only redefine this method if the new survey has named attributes (such as question objects).
+
+3. Add the class to this dictionary: `configread.surveys.survey_classes`.
+
+
+4. Add the 
+
+
+5. Verify that `beiwetools.manage` correctly handles registries of raw data from the new survey type.  
+
