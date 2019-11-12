@@ -105,12 +105,13 @@ Note that configuration files do *not* contain the following information:
 
 The Beiwe backend assigns a human-readable name to each study.  However, this name appears only in the name of the configuration file.  For this reason, configuration files should usually not be renamed.
 
-In this package, lists of attributes found in Beiwe configuration files are provided in two JSON files:
+In this package, lists of attributes found in Beiwe configuration files are provided in three JSON files:
 
 ```bash
 /beiwetools/configread/
 	study_settings.json
-	survey_settings.json	
+	survey_settings.json
+	question_settings.json
 ```
 
 <a name="format"/>Note that there are three slightly different formats for configuration files:
@@ -228,13 +229,18 @@ Raw survey data are organized as follows:
 ___
 ## 5. `beiwetools.helpers` <a name="helpers"/>
 
-This sub-package provides classes and functions that are used throughout `beiwetools` and also by Beiwe reporting packages (`accrep`, `gpsrep`, `survrep`).  Below is an overview of each module.
+This sub-package provides classes and functions that are used by `beiwetools` and also by Beiwe reporting packages (`accrep`, `gpsrep`, `survrep`).  Below is an overview of each module.
 
 #### `classes` & `functions`
 These modules provide general-purpose tools for tasks that often arise when working with Beiwe configurations and raw data.
 
 #### `colors`
 Some color maps and functions for generating Color Brewer palettes.
+
+#### `decorators`
+
+
+
 
 #### `plot`
 Functions for handling basic data visualization tasks, such as plotting timestamps and generating axis labels for longitudinal data.
@@ -262,7 +268,7 @@ Review [this section](#configuration) for information about configuration files.
 #### 6.1 Study Attributes
 To ensure compatibility across formats, `configread` looks for all known study attributes, regardless of file format.  Therefore, due to differences across configuration file formats, it is not unusual to see many missing values.
 
-Documented study attributes can be found in `study_settings.json` and `survey_settings.json`.  Any undocumented attributes are logged when a configuration file is read into a `BeiweConfig` instance.
+Documented study attributes can be found in `study_settings.json`, `survey_settings.json`, and `question_settings.json`.  Any undocumented attributes are logged when a configuration file is read into a `BeiweConfig` instance.
 
 #### 6.2 Identifiers
 A `BeiweConfig` instance will attach identifiers to each Beiwe survey and question object.  These correspond to the unique identifiers found in raw survey response data, and can be used to query the content of surveys and questions.  
@@ -274,6 +280,7 @@ The `export()` method generates configuration documentation for a `BeiweConfig` 
 
 ```
 configuration_documentation_from_<local time>/
+
 	The_Name_of_the_Study/
 
 		overview.txt
@@ -290,22 +297,22 @@ configuration_documentation_from_<local time>/
 			passive_data_settings.txt
 						
 		audio_surveys/
-			<Name of Audio Survey #1>.txt
-			<Name of Audio Survey #2>.txt		
+			<Name_of_Audio_Survey_#1>.txt
+			<Name_of_Audio_Survey_#2>.txt		
 			.
 			.
 			.
 
 		tracking_surveys/
-			<Name of Tracking Survey #1>.txt
-			<Name of Tracking Survey #2>.txt		
+			<Name_of_Tracking_Survey_#1>.txt
+			<Name_of_Tracking_Survey_#2>.txt		
 			.
 			.
 			.
 			
 		other_surveys/
-			<Name of Other Survey #1>.txt
-			<Name of Other Survey #2>.txt		
+			<Name_of_Other_Survey_#1>.txt
+			<Name_of_Other_Survey_#2>.txt		
 			.
 			.
 			.
@@ -313,22 +320,32 @@ configuration_documentation_from_<local time>/
 
 The file `warnings.txt` provides a record of any undocumented settings or objects found in the configuration file. A common undocumented object is the "dummy" survey type, which is probably assigned to surveys that have been deleted.
 
-The `records` folder contains everything needed to recreate an identical `BeiweConfig` instance.  To do this, either (1) provide paths to `raw.json` and `names.json` as input, or (2) provide a path to the folder labeled with the name of the study.  Note that `raw.json` is just a "pretty-printed" copy of the original Beiwe configuration file.
+The `records` folder contains everything needed to recreate an identical `BeiweConfig` instance.  To do this, either:  
+
+1. Provide paths to `raw.json` and `names.json` as input, or  
+2. Provide a path to the folder labeled with the name of the study.  
+
+Note that `raw.json` is just a "pretty-printed" copy of the original Beiwe configuration file.
 
 Other files with the `.txt` extension contain human-readable summaries of the contents of the Beiwe configuration.  In these files, an attribute that is "Not found" probably belongs to a different format of configuration file.  It is normal to see "Not found" in many places.
 
 #### 6.4 Naming
-By default, `configread` assigns human-readable names to each study survey and question.  Default names are of the form `Survey_01`, `Survey_01_Question_01`, etc.  Note that these names are assigned in the order in which objects appear in the corresponding JSON file, and may not agree with names found on the Beiwe backend.
+By default, `configread` assigns human-readable names to each study survey and question.  Default names look like this:  
 
-For convenience, it may be desirable to assign a descriptive name to each study survey and survey item.  Assigned names can be exported and reloaded for use in the future.  See `configread_example.ipynb` for sample code.
+* `Survey 01`, `Survey 02`, ...
+* `Survey 01 - Question 01`, `Survey 01 - Question 02`, ...  
+
+Note that these names are assigned in the order in which objects appear in the corresponding JSON file, and may not agree with names found on the Beiwe backend.
+
+For convenience, it may be desirable to assign a descriptive name to each study survey and survey item.  Assigned names can be exported and reloaded for use in the future.  See `configread_example.ipynb` for an illustration of this feature.
 
 #### 6.5 Scoring
-In Beiwe questionnaires (called "tracking surveys"), responses to checkbox and radio button items are assigned a numeric score.  This score is the zero-based index of the response in the corresponding list of answers.  For example, if possible answers are `['High', ''Medium', 'Low']` then the assigned scores are 0, 1, 2.
+In Beiwe questionnaires (called "tracking surveys"), responses to checkbox and radio button items are assigned a numeric score.  This score is the zero-based index of the response in the corresponding list of answers.  For example, if possible answers are `['High', 'Medium', 'Low']` then the corresponding scores are 0, 1, 2.
 
 #### 6.6 Limitations & Cautions
-This sub-package does not parse branching logic settings used for conditional delivery of tracking survey items.  Use `TrackingQuestion.logic` to view a question's logic configuration.
+This sub-package does not parse branching logic settings used for conditional delivery of tracking survey items.  A question's logic configuration, if any, is stored in the `logic` attribute of the corresponding  `TrackingQuestion` instance.
 
-Note that only tracking surveys and audio surveys are represented by dedicated classes.  Other survey types (e.g. image surveys) are represented with the generic `BeiweSurvey` class.
+Note that only tracking surveys and audio surveys are represented by dedicated classes (`TrackingSurvey`, `AudioSurvey`).  Other survey types (e.g. image surveys) are represented with the generic `BeiweSurvey` class.  [Here](#newsurvey) are guidelines for implementing additional survey types.
 
 Lastly, note that comparison of `configread` objects is intended to be somewhat flexible.  This is to accommodate the possibility that the same study configuration may be duplicated or serialized in different formats.  Therefore, some caution should be used when checking equality.
 
@@ -346,13 +363,14 @@ A new set of identifiers is created whenever the Beiwe app is installed or re-in
 Certain raw data from Android and iPhone devices are formatted differently, so researchers should use caution if data are collected for the same user ID with phones of different types.  In this unusual situation, the user's data should be carefully divided according to phone type and analyzed separately.
 
 #### 7.2 Raw data registries 
+The `ProjectData` class is intended to assist with implementation and reproducibility of Beiwe data analysis.  The main purpose of this class is to organize a registry of available raw data files for a set of Beiwe users over a fixed follow-up period.  These records can then be exported and reloaded for use in the future.  
+
 The `ProjectData` class can handle management of a single raw data directory, as well as merging of multiple raw data directories.  The latter may be useful under some circumstances:
 
 * Raw data from the same study may have been downloaded to multiple locations corresponding to different subsets of users or to different time ranges.  It may be desirable to create a single project that pools all users and time ranges.
 
 * Research participants may be organized into multiple arms, with smartphone data collection in each arm implemented with a different Beiwe study.  (This strategy might be used when different arms receive different surveys.)  In this case, it may be desirable to pool all users for analysis of common data streams and for preservation of blinding.
 
-If a user's follow-up data must be divided into several epochs, this can be accomplished with multiple `ProjectData` objects.  For example, if a user switched from an iPhone to an Android phone, create three projects: two for managing data types that differ across platforms (e.g. tracking surveys and accelerometer) and the third for managing data types that do not differ.
 
 ___
 ## 8. `beiwetools.localize` <a name="localize"/>
@@ -384,6 +402,7 @@ The following code samples (iPython notebooks) are also located in the `examples
 
 * `configread_example.ipynb`
 * `manage_example.ipynb`
+* `passive_summary_example.ipynb`
 * `survrep_example.ipynb`
 * `gpsrep_example.ipynb`
 * `accrep_example.ipynb`
@@ -404,34 +423,57 @@ Note that an unknown setting can still be queried with `BeiweConfig.settings.oth
 
 Below are some guidelines for updating this package to accommodate new settings and objects.  After making changes, edit this file (`beiwetools/README.md`) with notes [here](#format) and elsewhere as needed.
 
-#### 10.1 New study settings
-Study settings are organized alphabetically under several headings.  Documented settings are found in `configread/study_settings.json`.  The headings are arbitrary, so a new setting key can be added to this file wherever it fits best.
+#### 10.1 New settings
+Study settings are organized alphabetically under several headings in `configread/study_settings.json`.  The headings are arbitrary, so a new setting key can be added to this file wherever it fits best.
+
+Survey attributes are found in `configread/survey_settings.json`.  A new setting that is common to all survey objects can go in the first entry.  New attributes for a specific survey type should be added to the corresponding entry.
+
+Question settings are in `configread/question_settings.json`.  As for surveys, the first entry is for shared attributes and the remaining entries are for specific types of question objects. 
 
 #### 10.2 New tracking question type
-Classes for survey questions derive from the parent class:   `configread.questions.TrackingQuestion`
+To implement a new type of question:
 
-When defining a new question type, it's probably enough to just define the `get_other_content()` method, which determines the specific attributes of the question type and how those attributes are printed to a summary.  
+1. Add an entry for the new question type here:  
+`configread/question_settings.json`  
+The key is the question type (as it appears in a JSON file) and the value is a list of unique attributes for that type of question.
 
-For examples, see: 
+2. Define a class for the new question that inherits from this class:   
+`configread.questions.TrackingQuestion`
+
+3. After creating the class, add it to this dictionary:  
+`configread.questions.tracking_questions`
+
+For examples, see:  
 `configread.questions.RadioButton`  
 `configread.questions.Slider`  
 
-After creating the class, add it to this dictionary:   `configread.questions.tracking_questions`
-
-#### 10.3 New survey type
+#### 10.3 New survey type <a name="newsurvey"/>
 To implement a new survey type:
 
-1. Add an entry for the new survey type in `configread/study_settings.json`.  The key can be something like `<survey_type>_settings` and the value is a list of attributes for the survey type.
-2. Define a class for the new survey that inherits from `configread.surveys.BeiweSurvey`.  Re-define `__init__()` to indicate where the survey should be documented.
+1. Add an entry for the new survey type here:  
+`configread/survey_settings.json`  
+The key is the survey type and the value is a list of specific attributes for the survey type.  Don't include attributes that are already listed under the key `common_survey_info`.
+2. Define a class for the new survey that inherits from this class:  
+`configread.surveys.BeiweSurvey`  
+Re-define `__init__()` to indicate where the survey should be documented.
 If necessary, re-define the following methods:  
-    * `get_settings()`: Which survey settings to look for in the configuration file.
+    * `get_settings()`: Which type-specific survey settings to look for in the configuration file.
     * `get_content()`: What are the survey attributes, how should attributes be printed to a summary, and which attributes are used for object comparison.  
-    * `update_names()`: How to rename the survey and nested objects.  Only redefine this method if the new survey has named attributes (such as question objects).
+    * `update_names()`: How to rename the survey and any nested objects.  Only redefine this method if the new survey has named attributes (such as question objects).
 
-3. Add the class to this dictionary: `configread.surveys.survey_classes`.
+3. Add the class to this dictionary:   
+`configread.surveys.survey_classes`
 
-4. Identify the output folder(s) for raw data from the new survey type and update `beiwetools.manage.functions.survey_output'.
+4. Identify the output folder(s) for raw data from the new survey type and update `beiwetools.manage.
 
-5. Verify that `beiwetools.manage.BeiweProject` correctly handles registries of raw data from the new survey type.  This should not be a problem if the new survey delivers data to the usual location:  
+
+functions.survey_data'.
+
+5. Verify that `beiwetools.manage.BeiweProject` correctly handles registries of raw data from the new survey type.  This should not be a problem if the new survey delivers data to the expected location:  
 `<raw data directory>/<Beiwe User ID>/<survey type>/<survey identifier>/`
 
+#### 10.4 New passive data stream
+
+update `beiwetools.manage.
+
+functions.passive_data'.

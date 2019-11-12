@@ -1,27 +1,21 @@
 {
-     "survey_info": [
+     "common_survey_info": [
           "id",
           "_id",
           "object_id",
           "survey_type",
           "deleted"
      ],
-     "audio_survey_settings": [
+     "audio_survey": [
           "audio_survey_type",
           "bit_rate",
           "trigger_on_first_download",
           "sample_rate"
      ],
-     "tracking_survey_settings": [
+     "tracking_survey": [
           "randomize",
           "trigger_on_first_download",
           "randomize_with_memory",
           "number_of_random_questions"
-     ],
-     "question_info": [
-          "question_id",
-          "question_type",
-          "display_if",
-          "question_text"
      ]
 }

@@ -1,14 +1,19 @@
-'''
-Classes for working with Beiwe study configurations.
+'''Classes for working with Beiwe study configurations.
+
+See /examples/configread_example.ipynb for sample usage.
 '''
 import os
 import logging
 from collections import OrderedDict
-from beiwetools.helpers import (check_same, Summary, 
-                                local_now, setup_directories, 
-                                read_json, write_json, write_string)
-from .functions import *
-    
+
+from beiwetools.helpers.time import local_now
+from beiwetools.helpers.classes import Summary
+from beiwetools.helpers.functions import (check_same, setup_directories, 
+                                          read_json, write_json, write_string)
+
+from .surveys import survey_classes, BeiweSurvey
+from .functions import load_settings, study_settings
+
 
 logger = logging.getLogger(__name__)
 
@@ -35,18 +40,19 @@ class BeiweConfig():
             Default assignments are:
                 "Survey_1", "Survey_2", etc.
                 "Survey_1_Question_1", "Survey_1_Question_2", etc.
-        name_lookup (dict): 
-            If assigned names are all unique, keys are names and values are identifiers.
+        identifier_lookup (dict): 
+            Keys are names and values are object identifiers.
             This dictionary is just for convenience, to find an identifier given the name of a survey or question.
         default_names (bool): 
             Whether or not surveys & questions are assigned default names.
             True if configuration is loaded with names_path = None.
             False if:
-                Update_names() method is called,
+                The update_names() method has been called,
                 The configuration is loaded from an export,
                 Or configuration is loaded with a name assignment dictionary.
         raw (OrderedDict): The deserialized configuration file.
-        extended_format (bool): True if the JSON file uses MongoDB Extended JSON format, False otherwise.
+        extended_format (bool): 
+            True if the JSON file uses MongoDB Extended JSON format, False otherwise.
         identifier (int or str): 
             If the JSON file uses MongoDB Extended JSON format, then the id is a 24-character identifier for the study.
             Otherwise, the id is an integer.
@@ -54,12 +60,11 @@ class BeiweConfig():
         summary (Summary):  Some features of the BeiweConfig object for printing.
         device_settings (OrderedDict): Keys are setting names, values are the settings.    
         surveys (OrderedDict): Keys are survey IDs, values are BeiweSurvey objects.
-        audio_surveys (list): Survey IDs for audio surveys.
-        tracking_surveys (list): Survey IDs for tracking surveys.
-        other_surveys (list): Other survey IDs.
-        ignore (list): Attributes to ignore when checking equality.
+        survey_ids (OrderedDict): 
+            Keys are survey class adjectives, e.g. 'audio', 'tracking', 'other'.
+            Values are lists of identifiers for surveys of that class.
+        to_check (list): Attributes to consider when checking equality.
     """    
-
     def __init__(self, path, names_path = None):
         self.warnings = []
         self.paths = OrderedDict()
@@ -94,9 +99,7 @@ class BeiweConfig():
         self.settings = DeviceSettings(self.raw['device_settings'], self)
         # read surveys
         self.surveys = OrderedDict()
-        self.audio_surveys = []
-        self.tracking_surveys = []
-        self.other_surveys = []
+        self.survey_ids = OrderedDict()
         n_surveys = len(self.raw['surveys'])
         n_digits = len(str(n_surveys)) 
         for i in range(n_surveys):
@@ -109,43 +112,54 @@ class BeiweConfig():
             if survey_id in self.name_assignments.keys():
                 name = self.name_assignments[survey_id]
             else:
-                name = 'Survey_' + str(i+1).zfill(n_digits)            
+                name = 'Survey ' + str(i+1).zfill(n_digits)            
                 self.name_assignments[survey_id] = name
             # read survey
-            if s['survey_type'] == 'audio_survey':
-                survey = AudioSurvey(s, self, name)
-                self.audio_surveys.append(survey.identifier)
-            elif s['survey_type'] == 'tracking_survey':
-                survey = TrackingSurvey(s, self, name)
-                self.tracking_surveys.append(survey.identifier)
+            if s['survey_type'] in survey_classes.keys(): 
+                SC = survey_classes[s['survey_type']]
+                survey = SC(s, self, name)
             else:
                 survey = BeiweSurvey(s, self, name)
-                self.other_surveys.append(survey.identifier)
                 flag = 'Found unknown survey type: %s' % survey.type
                 self.warnings.append(flag)
                 logger.warning(flag)
             self.surveys[survey.identifier] = survey
+            # update dictionary of survey ids
+            if survey.class_adjective in self.survey_ids.keys():
+                self.survey_ids[survey.class_adjective].append(survey.identifier)
+            else:
+                self.survey_ids[survey.class_adjective] = [survey.identifier]
         # get summary
         self.summarize()
-        # name lookup dictionary            
+        # identifier lookup dictionary            
         self.get_lookup()
         # when checking equality
         self.to_check = ['settings', 'surveys']
 
     def get_lookup(self):
-        if len(list(set(self.name_assignments.values()))) == len(self.name_assignments):
-            self.name_lookup = {v:k for k, v in self.name_assignments.items()}
-        else: 
-            self.name_lookup = {}
-            logger.warning('Name assignments are not unique.')
+        '''
+        Invert the name_assignments dictionary.
+        '''
+        self.identifier_lookup = {v:k for k, v in self.name_assignments.items()}
 
     def summarize(self):
-        details = Summary(['Identifier', 'MongDB Extended JSON format', 'Default names'],
-                          [self.identifier, self.extended_format, self.default_names])
-        survey_counts = Summary(['Audio Surveys', 'Tracking Surveys', 'Other Surveys'],
-                                [len(s) for s in [self.audio_surveys, self.tracking_surveys, self.other_surveys]])
-        self.summary = Summary([self.name, 'Number of Surveys'],
-                               [details, survey_counts])
+        '''
+        Get a configuration overview for printing.
+        '''
+        identifiers = Summary(['Study Identifier (may not agree with backend)', 'MongDB Extended JSON format', 'Default names'],
+                              [self.identifier, self.extended_format, self.default_names])
+        active = OrderedDict()
+        deleted = OrderedDict()
+        for k in self.survey_ids.keys():
+            a = [i for i in self.survey_ids[k] if not self.surveys[i].deleted is True]
+            d = [i for i in self.survey_ids[k] if self.surveys[i].deleted is True]            
+            active[k.capitalize()]  = len(a)
+            deleted[k.capitalize()] = len(d)
+        active_survey_counts  = Summary(list(active.keys()), list(active.values()))
+        deleted_survey_counts = Summary(list(deleted.keys()), list(deleted.values()))
+        self.summary = Summary(['Identifiers', 'Number of Active Surveys', 'Number of Deleted Surveys'],
+                               [identifiers, active_survey_counts, deleted_survey_counts],
+                               header = self.name)
     
     def update_names(self, new_names):
         '''
@@ -158,14 +172,17 @@ class BeiweConfig():
         Returns:
             None
         '''
-        for k in self.name_assignments:
-            if self.name_assignments[k] in new_names.keys():
-                self.name_assignments[k] = new_names[self.name_assignments[k]]
-        self.default_names = False
-        self.name = self.name_assignments[self.identifier]
-        for s in self.surveys.values(): s.update_names(self.name_assignments)
-        self.summarize()
-        self.get_lookup()
+        if len(list(set(self.name_assignments.values()))) != len(self.name_assignments):
+            logger.warning('Name update failed.  Name assignments are not unique.')
+        else:
+            for k in self.name_assignments:
+                if self.name_assignments[k] in new_names.keys():
+                    self.name_assignments[k] = new_names[self.name_assignments[k]]
+            self.default_names = False
+            self.name = self.name_assignments[self.identifier]
+            for s in self.surveys.values(): s.update_names(self.name_assignments)
+            self.summarize()
+            self.get_lookup()
 
     def __eq__(self, other):
         return(check_same(self, other, self.to_check))
@@ -213,314 +230,17 @@ class BeiweConfig():
                                               indent = indent, max_width = max_width,
                                               extra_breaks = [1, 2])        
         # export surveys        
-        dir_names = ['audio_surveys', 'tracking_surveys', 'other_surveys']
-        surveys = [self.audio_surveys, self.tracking_surveys, self.other_surveys]
-        for i in range(len(surveys)): 
-            survey_list = surveys[i]
-            if len(survey_list) > 0:
-                survey_dir = os.path.join(out_dir, dir_names[i])
-                setup_directories(survey_dir)
-                for k in survey_list:
-                    s = self.surveys[k]
-                    name = s.name.replace(' ', '_')
-                    if not s.deleted is None and s.deleted:
-                        name = 'deleted_' + name
-                    s.summary.to_file(name, survey_dir, indent = indent, max_width = max_width)
+        surveys = list(self.surveys.values())
+        adjectives = list(set([s.class_adjective for s in surveys]))
+        survey_dirs = [os.path.join(out_dir, a + '_surveys') for a in adjectives]
+        setup_directories(survey_dirs)
+        for s in surveys:
+            survey_dir = os.path.join(out_dir, s.class_adjective + '_surveys')
+            name = s.name.replace(' ', '_')
+            if s.deleted is True: name = 'deleted_' + name
+            s.summary.to_file(name, survey_dir, indent = indent, max_width = max_width)
+        # return location of documentation
         return(out_dir)
-
-
-class BeiweSurvey():
-    '''
-    Class for representing a survey from a Beiwe configuration file.
-    
-    Args:
-        survey_config (OrderedDict):  From a JSON configuration file.
-        beiweconfig (BeiweConfig): The instance to which this survey belongs.
-        
-    Attributes:
-        name (str): An additional identifier for the study, optional.
-        raw (OrderedDict): The deserialized survey configuration.
-        extended_format (bool): True if the JSON file uses MongoDB Extended JSON format, False otherwise.
-        deleted (bool):  True if the survey was deleted.
-        type (str):  Examples are 'audio_survey', 'dummy', or 'tracking_survey'.        
-        identifier (str):  The 24-character identifier for the survey.
-        info (OrderedDict):  Includes identifiers, survey type, and whether the survey was deleted.
-        settings (OrderedDict):  Survey settings from the JSON configuration file.
-        timings (OrderedDict): Human-readable timings.  Keys are days of the week, values are lists of scheduled times. 
-        content (list):  Content from the JSON configuration file.       
-        content_dict (OrderedDict): Content organized for printing export.
-        summary (Summary): Summary of survey attributes for printing.
-        to_check (list): Attributes to consider when checking equality.
-    '''
-    def __init__(self, survey_config, beiweconfig, name = None):
-        self.name = name
-        self.raw = survey_config
-        # get identifier and deleted status
-        if beiweconfig.extended_format:
-            self.identifier = self.raw['_id']['$oid']
-            self.deleted = None
-        else:
-            self.identifier = self.raw['object_id']
-            self.deleted = self.raw['deleted']
-        # get survey type
-        self.type = self.raw['survey_type']
-        # get info
-        self.info = load_settings(survey_info, self.raw)
-        # get settings
-        self.get_settings()
-        # get timings
-        self.timings = load_timings(self.raw['timings'])
-        # get content
-        self.get_content(beiweconfig)
-        # summary
-        self.summarize()
-
-    def get_settings(self):
-        self.settings = self.raw['settings']
-        
-    def get_content(self, beiweconfig):
-        self.content = self.raw['content']
-        self.content_dict = OrderedDict([('Content', self.content)])
-        # when checking equality
-        self.to_check = ['type', 'settings', 'timings', 'content']
-
-    def summarize(self):
-        labels = ['Info', 'Settings', 'Timings'] + list(self.content_dict.keys())
-        items = [self.info, self.settings, self.timings] + list(self.content_dict.values())
-        self.summary = Summary(labels, items, header = self.name)
-
-    def update_names(self, name_assignments):
-        self.name = name_assignments[self.identifier]
-        self.summarize()
-
-    def __eq__(self, other):
-        return(check_same(self, other, self.to_check))
-
-        
-class AudioSurvey(BeiweSurvey):
-    '''
-    Class for representing an audio survey from a Beiwe configuration file.
-    Inherits from BeiweSurvey.
-        
-    Attributes:
-        settings (OrderedDict):  Audio survey settings from the JSON configuration file.
-        prompt (str):  Audio survey prompt.
-    '''    
-    def __init__(self, survey_config, beiweconfig, name = None):
-        super().__init__(survey_config, beiweconfig, name)
-
-    def get_settings(self):
-        self.settings = load_settings(audio_survey_settings, self.raw['settings'])
-        
-    def get_content(self, beiweconfig):
-        try:
-            self.prompt = self.raw['content'][0]['prompt']
-        except:
-            self.prompt = None
-        self.content_dict = OrderedDict([('Prompt', self.prompt)])        
-        # when checking equality
-        self.to_check = ['type', 'settings', 'timings', 'prompt']     
-
-class TrackingSurvey(BeiweSurvey):        
-    '''
-    Class for representing a tracking survey from a Beiwe configuration file.
-    Inherits from BeiweSurvey.
-        
-    Attributes:
-        settings (OrderedDict):  Tracking survey settings from the JSON configuration file.
-        questions (OrderedDict):  Keys are question IDs, values are Tracking Question objects.
-    '''    
-    def __init__(self, survey_config, beiweconfig, name = None):
-        super().__init__(survey_config, beiweconfig, name)
-
-    def get_settings(self):
-        self.settings = load_settings(tracking_survey_settings, self.raw['settings'])
-
-    def get_content(self, beiweconfig):
-        self.questions = OrderedDict()
-        n_questions = len(self.raw['content'])
-        n_digits = len(str(n_questions))
-        for i in range(n_questions):
-            question_config = self.raw['content'][i]
-            qid = question_config['question_id']
-            # get/assign name
-            if qid in beiweconfig.name_assignments:
-                qname = beiweconfig.name_assignments[qid]
-            else:
-                qname = self.name + '_Question_' + str(i+1).zfill(n_digits)
-                beiweconfig.name_assignments[qid] = qname
-            # identify question type            
-            qtype = question_config['question_type']
-            if qtype in tracking_questions.keys():
-                self.questions[qid] = tracking_questions[qtype](question_config, qname)         
-            else: 
-                self.questions[qid] = TrackingQuestion(question_config, qname)
-                flag = 'Found unknown question type: %s' %qtype
-                beiweconfig.warnings.append(flag)
-                logger.warning(flag)        
-        self.get_content_dict()
-        # when checking equality
-        self.to_check = ['type', 'settings', 'timings', 'questions']     
-
-    def get_content_dict(self):
-        question_summary = Summary(['\n' + q.name for q in self.questions.values()], 
-                                       [q.summary for q in self.questions.values()])        
-        self.content_dict = OrderedDict([('Questions', question_summary)]) 
-
-    def update_names(self, name_assignments):
-        self.name = name_assignments[self.identifier]
-        for q in self.questions.values():
-            q.name = name_assignments[q.identifier]
-            q.summarize()
-        self.get_content_dict()
-        self.summarize()
-
-
-class TrackingQuestion():
-    '''
-    Class for representing a tracking survey question from a Beiwe configuration file.
-    
-    Args:
-        question_config (OrderedDict):  From a JSON configuration file.
-        
-    Attributes:
-        name (str): Assigned in order of creation, e.g. Q_01, Q_02, etc.
-        raw (OrderedDict): The deserialized question configuration.        
-        extended_format (bool): True if the JSON file uses MongoDB Extended JSON format, False otherwise.
-        identifier (str):  The 36-character question_id. 
-        type (str):  Question type, e.g 'info_text_box'
-        info (OrderedDict):  Keys are 'question_id', 'question_type', 'display_if', 'question_text'
-        other (OrderedDict):  Content that is specific to the question type.
-        logic (OrderedDict):  The branching logic configuration from the JSON file.
-        summary (Summary): Summary of question attributes for printing.
-        to_check (list): Attributes to consider when checking equality.
-    '''    
-    def __init__(self, question_config, name = None):
-        self.raw = question_config
-        self.name = name
-        # does the configuration file use MongoDB Extended JSON? 
-        self.extended_format = '$oid' in str(self.raw)
-        # get identifier
-        self.identifier = self.raw['question_id']
-        # get question type
-        self.type = self.raw['question_type']
-        # get info
-        self.info = load_settings(question_info, self.raw)
-        # get other content
-        self.get_other_content()        
-        # get logic
-        if not self.info['display_if'] == 'Not found':
-            self.logic = self.info['display_if']
-            self.info['display_if'] = 'Uses branching logic, see configuration file for details.'
-        else:
-            self.logic = None
-            self.info['display_if'] = 'Does not use branching logic.'            
-        # summary
-        self.summarize()    
-        # when checking equality
-        self.to_check = ['info', 'other', 'logic']
-        
-    def get_other_content(self):
-        self.other = OrderedDict()        
-        for k in self.raw.keys():
-            if k not in question_info:
-                self.other[k] = self.raw[k]
-
-    def update_names(self, name_assignments):
-        self.name = name_assignments[self.identifier]
-        self.summarize()
-        
-    def summarize(self):
-        labels = list(self.info.keys()) + list(self.other.keys())
-        items =  list(self.info.values()) + list(self.other.values())
-        self.summary = Summary(labels, items, header = self.name)
-
-    def __eq__(self, other):
-        return(check_same(self, other, self.to_check))
-
-    
-class InfoTextBox(TrackingQuestion):
-    '''
-    Class for representing an info text box from a Beiwe tracking survey.
-    Inherits from TrackingQuestion.
-    '''
-    def __init__(self, question_config, name = None):
-        super().__init__(question_config, name)
-
-
-class CheckBox(TrackingQuestion):
-    '''
-    Class for representing a check box question from a Beiwe tracking survey.
-    Inherits from TrackingQuestion.
-
-    Args:
-        answers (list): List of question answers in the order they appear in the configuration file.
-    '''
-    def __init__(self, question_config, name = None):
-        super().__init__(question_config, name)
-        
-    def get_other_content(self):
-        self.answers = [list(a.values())[0] for a in self.raw['answers']]
-        #numbered_answers = [str(i) + ': ' + self.answers[i] for i in range(len(self.answers))]
-        numbered_answers = OrderedDict([(str(i), self.answers[i]) for i in range(len(self.answers))])    
-        self.other = OrderedDict([('answers', numbered_answers)])
-
-
-class RadioButton(TrackingQuestion):
-    '''
-    Class for representing a radio button question from a Beiwe tracking survey.
-    Inherits from TrackingQuestion.
-
-    Args:
-        answers (list): List of question answers in the order they appear in the configuration file.
-    '''
-    def __init__(self, question_config, name = None):
-        super().__init__(question_config, name)
-        self.answers = [list(a.values())[0] for a in self.raw['answers']]
-
-    def get_other_content(self):
-        self.answers = [list(a.values())[0] for a in self.raw['answers']]
-        numbered_answers = OrderedDict([(str(i), self.answers[i]) for i in range(len(self.answers))])
-        self.other = OrderedDict([('answers', numbered_answers)])
-
-
-class Slider(TrackingQuestion):
-    '''
-    Class for representing a slider question from a Beiwe tracking survey.
-    Inherits from TrackingQuestion.
-    
-    Args:
-        min, max (int): Slider endpoints.
-    '''
-    def __init__(self, question_config, name = None):
-        super().__init__(question_config, name)
-        
-    def get_other_content(self):
-        self.min = self.raw['min']
-        self.max = self.raw['max']
-        self.other = OrderedDict([('min', self.min), ('max', self.max)])       
-        
-
-class FreeResponse(TrackingQuestion):
-    '''
-    Class for representing a free response question from a Beiwe tracking survey.
-    Inherits from TrackingQuestion.
-    
-    Args:
-        text_field_type ():
-    '''
-    def __init__(self, question_config, name = None):
-        super().__init__(question_config, name)
-
-    def get_other_content(self):
-        self.text_field_type = self.raw['text_field_type']
-        self.other = OrderedDict([('text_field_type', self.text_field_type)])         
-
-
-# Dictionary of tracking question types
-qtypes = ['info_text_box', 'checkbox', 'radio_button', 'slider', 'free_response']
-qclasses = [InfoTextBox, CheckBox, RadioButton, Slider, FreeResponse]
-tracking_questions = OrderedDict(zip(qtypes, qclasses))
 
 
 class DeviceSettings():
@@ -575,5 +295,3 @@ class DeviceSettings():
 
     def __eq__(self, other):
         return(check_same(self, other, self.to_check))
-
-        
