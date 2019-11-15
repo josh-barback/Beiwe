@@ -22,5 +22,5 @@ setup(
     license=license,
     packages=find_namespace_packages(include = ['beiwetools.*']),
     package_data = {'': ['*.json']},
-	install_requires = requires
+    install_requires = requires
 )

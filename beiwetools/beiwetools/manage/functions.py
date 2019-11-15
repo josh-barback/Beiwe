@@ -2,9 +2,81 @@
 Classes for working with directories of raw Beiwe data.
 '''
 import os
+import logging
 from collections import OrderedDict
-from beiwetools.helpers.functions import sort_by
+from beiwetools.helpers.functions import sort_by, read_json, setup_csv, write_to_csv
+from .headers import identifiers_header, user_summary_header
 
+
+logger = logging.getLogger(__name__)
+
+
+# get names for passive data streams and survey directories
+this_dir = os.path.dirname(__file__)
+try:
+    data_streams = read_json(os.path.join(this_dir, 'data_streams.json'))
+    passive_data = data_streams['passive_data'] # raw passive data directories
+    survey_data = data_streams['survey_data']   # raw survey data directories
+    # drop 'identifiers' and sort passive data streams:
+    passive_available = {'both': [], 'iOS': [], 'Android': []}
+    for k in passive_data.keys():
+        if k != 'identifiers':
+            passive_available['both'].append(k)
+            if passive_data[k]['iOS']: passive_available['iOS'].append(k)                                
+            if passive_data[k]['Android']: passive_available['Android'].append(k)
+            if not passive_data[k]['Android'] and not passive_data[k]['iOS']:    
+                logger.warning('Check data stream records for \'%s\' .' %k)
+except:
+    logger.warning('There\'s a problem with the data stream records.')
+
+
+def check_dirs(dirs):
+    '''
+    Args:
+        dirs (list):  List of paths to directories.    
+
+    Returns:
+        not_exist (list): Paths in dirs that don't exist.        
+        not_dir (list):   Paths in dirs that exist but aren't directories.
+        empty (list):     Paths in dirs that exist but are empty.
+        not_empty (list): Paths in dirs that contain files or folders.
+    '''
+    not_exist, not_dir, empty, not_empty = [], [], [], []
+    for d in dirs:
+        if not os.path.exists(d):
+            not_exist.append(d)
+        else:
+            if not os.path.isdir(d):
+                not_dir.append(d)
+            else:
+                if len(os.listdir(d)) == 0:
+                    empty.append(d)
+                else:
+                    not_empty.append(d)
+    return(not_exist, not_dir, empty, not_empty)
+    
+    
+def get_survey_ids(dirs):
+    '''
+    Args:
+        dirs (list): List of paths to directories that contain a survey type.
+    
+    Returns:
+        sids (list): 
+            List of survey ID folders that are found in at least one of dirs.    
+        files (list):
+            Paths to raw files, which may be found in some older survey type folders.
+    '''
+    sids, files = [], []
+    for d in dirs:
+        temp = os.listdir(d)        
+        sids += [t for t in temp if os.path.isdir (os.path.join(d, t))]
+        raw   = [f for f in temp if os.path.isfile(os.path.join(d, f))]
+        files += [os.path.join(d, f) for f in raw]
+    sids =  sorted(list(set(sids)))
+    files.sort()
+    return(sids, files)
+    
 
 def merge_contents(data_dirs, UTC_range = None):
     '''
@@ -22,6 +94,7 @@ def merge_contents(data_dirs, UTC_range = None):
         merge (list):  
             A list of paths in which no basename is duplicated, sorted in order of basenames.
     '''    
+    if isinstance(data_dirs, str): data_dirs = [data_dirs]
     if len(data_dirs) == 1:
          d = data_dirs[0]
          file_names = sorted(os.listdir(d))
@@ -51,172 +124,180 @@ def merge_contents(data_dirs, UTC_range = None):
     return(merge)
 
 
-def registry_passive(user_id, data_stream, raw_dirs, UTC_range = None):
-    '''
-    In some cases, downloaded Beiwe data may be located in multiple locations.
-    These locations may contain duplicate filenames.
-    This function collects all filepaths for a user's data stream data, drops duplicates, and chooses newer (larger) files whenever possible.
-    
-    Args:
-        user_id (str):  Beiwe user id.
-        data_stream (str):  The name of a Beiwe data stream.
-            Should not be 'survey_answers', 'survey_timings', 'audio_recordings'.
-        raw_dirs (list):  List of paths to raw data directories.
-        UTC_range (list or Nonetype): Optional.  
-            Ordered pair of date/times in filename_time_format, [start, end].
-            If not None, ignore files before start and after end.
+# summarize to data frame
 
-    Returns:        
-        first, last (str): Date/times of first and last files in merge.
-        merge (list):  List of paths to files.
-    '''
-    if type(raw_dirs) is str: raw_dirs = [raw_dirs]
-    data_dirs = [os.path.join(os.path.join(d, user_id), data_stream) for d in raw_dirs]
-    data_dirs = [d for d in data_dirs if os.path.exists(d)]
-    merge = merge_contents(data_dirs, UTC_range)
-    if len(merge) > 0:
-        first = os.path.basename(merge[0]).split('.')[0]
-        last = os.path.basename(merge[-1]).split('.')[0]
-    else:
-        first = None
-        last = None
-    return(first, last, merge)
+#sensor_data = []
+#other_passive = []
+#surveys = []
 
 
-def registry_survey(user_id, survey_id, raw_dirs, UTC_range = None):
-    '''
-    In some cases, downloaded Beiwe data may be located in multiple locations.
-    These locations may contain duplicate filenames.
-    This function collects all filepaths for a user's survey data, drops duplicates, and chooses newer (larger) files whenever possible.
-    
-    Args:
-        user_id (str):  Beiwe user id.
-        survey_id (str):  Beiwe tracking survey id.
-        raw_dirs (list):  List of paths to raw data directories.
-        UTC_range (list or Nonetype): Optional.  
-            Ordered pair of date/times in filename_time_format, [start, end].
-            If not None, ignore files before start and after end.
 
-    Returns:        
-        first, last (str): Date/times of first and last files in merge.
-        merge (OrderedDict):  Keys are 'survey_answers', 'survey_timings'.
-            Values are merged files for the corresponding data stream.
-    '''
-    if type(raw_dirs) is str: raw_dirs = [raw_dirs]
-    merge = OrderedDict()
-    first_dts = []
-    last_dts = []
-    for s in ['survey_answers', 'survey_timings']:               
-        data_dirs = [os.path.join(os.path.join(os.path.join(d, user_id), s), survey_id) for d in raw_dirs]
-        data_dirs = [d for d in data_dirs if os.path.exists(d)]
-        merge[s] = merge_contents(data_dirs, UTC_range)
-        if len(merge[s]) > 0:
-            first_dts.append(os.path.basename(merge[s][0]).split('.')[0])
-            last_dts.append(os.path.basename(merge[s][-1]).split('.')[0])
-    if len(first_dts) > 0:
-        first = min(first_dts)
-        last = max(last_dts)
-    else:
-        first = None
-        last = None
-    return(first, last, merge)
-
-
-def registry_audio(user_id, audio_id, raw_dirs, UTC_range = None):
-    '''
-    In some cases, downloaded Beiwe data may be located in multiple locations.
-    These locations may contain duplicate filenames.
-    This function collects all filepaths for a user's audio survey data, drops duplicates, and chooses newer (larger) files whenever possible.
-    
-    Args:
-        user_id (str):  Beiwe user id.
-        audio_id (str):  Beiwe audio survey id.
-        raw_dirs (list):  List of paths to raw data directories.
-        UTC_range (list or Nonetype): Optional.  
-            Ordered pair of date/times in filename_time_format, [start, end].
-            If not None, ignore files before start and after end.
-
-    Returns:        
-        first, last (str): Date/times of first and last files in merge.
-        merge (list):  List of paths to files.
-    '''
-    if type(raw_dirs) is str: raw_dirs = [raw_dirs]
-    data_dirs = [os.path.join(os.path.join(os.path.join(d, user_id), 'audio_recordings'), audio_id) for d in raw_dirs]
-    data_dirs = [d for d in data_dirs if os.path.exists(d)]
-    merge = merge_contents(data_dirs, UTC_range)
-    if len(merge) > 0:
-        first = os.path.basename(merge[0]).split('.')[0]
-        last = os.path.basename(merge[-1]).split('.')[0]
-    else:
-        first = None
-        last = None
-    return(first, last, merge)
-
-
-def make_registry(user_id, raw_dirs, UTC_range = None):
-    '''
-    Merges all data streams for a user.
-
-    Args:
-        user_id (str):  Beiwe user id.
-        raw_dirs (list):  List of paths to raw data directories.
-        UTC_range (list or Nonetype): Optional.  
-            Ordered pair of date/times in filename_time_format, [start, end].
-            If not None, ignore files before start and after end.
-
-    Returns:        
-        merge (OrderedDict):  
-            For keys 'first', 'last':  Values are date/time of first or last observations.
-            For keys 'passive', 'tracking', 'audio': Values are corresponding merged file lists.
-    '''
-    if type(raw_dirs) is str: raw_dirs = [raw_dirs]
-    # get all survey ids and names of data streams
-    data_streams = []
-    survey_ids = []
-    audio_ids = []
-    for d in raw_dirs:
-        for top, dirs, filenames in os.walk(d):            
-            if user_id in top:
-                if 'audio' in top:                
-                    audio_ids.append(os.path.basename(top))                
-                elif 'survey' in top:
-                    survey_ids.append(os.path.basename(top))
-                else:
-                    data_streams.append(os.path.basename(top))
-    data_streams = list(set([i for i in data_streams if user_id not in i]))
-    survey_ids = list(set([i for i in survey_ids if 'survey' not in i]))    
-    audio_ids = list(set([i for i in audio_ids if 'audio' not in i]))    
-    # merge everything
-    first_dts = []
-    last_dts = []
-    merge_p = OrderedDict()
-    merge_s = OrderedDict()
-    merge_a = OrderedDict()
-    for s in data_streams:
-        f, l, m = registry_passive(user_id, s, raw_dirs, UTC_range)
-        first_dts.append(f)
-        last_dts.append(l)
-        merge_p[s] = m
-    for s in survey_ids:
-        f, l, m = registry_survey(user_id, s, raw_dirs, UTC_range)        
-        first_dts.append(f)
-        last_dts.append(l)        
-        merge_s[s] = m
-    for s in audio_ids:
-        f, l, m = registry_audio(user_id, s, raw_dirs, UTC_range)            
-        first_dts.append(f)
-        last_dts.append(l)                
-        merge_a[s] = m
-    first_dts = [i for i in first_dts if not i is None]
-    last_dts = [i for i in last_dts if not i is None]
-    if len(first_dts) > 0:
-        first = min(first_dts)
-        last = max(last_dts)
-    else:
-        first = None
-        last = None
-    merge = OrderedDict(zip(['first', 'last', 'passive', 'tracking', 'audio'], 
-                            [first, last, merge_p, merge_s, merge_a]))
-    return(merge)
+#def registry_passive(user_id, data_stream, raw_dirs, UTC_range = None):
+#    '''
+#    In some cases, downloaded Beiwe data may be located in multiple locations.
+#    These locations may contain duplicate filenames.
+#    This function collects all filepaths for a user's data stream data, drops duplicates, and chooses newer (larger) files whenever possible.
+#    
+#    Args:
+#        user_id (str):  Beiwe user id.
+#        data_stream (str):  The name of a Beiwe data stream.
+#            Should not be 'survey_answers', 'survey_timings', 'audio_recordings'.
+#        raw_dirs (list):  List of paths to raw data directories.
+#        UTC_range (list or Nonetype): Optional.  
+#            Ordered pair of date/times in filename_time_format, [start, end].
+#            If not None, ignore files before start and after end.
+#
+#    Returns:        
+#        first, last (str): Date/times of first and last files in merge.
+#        merge (list):  List of paths to files.
+#    '''
+#    if type(raw_dirs) is str: raw_dirs = [raw_dirs]
+#    data_dirs = [os.path.join(os.path.join(d, user_id), data_stream) for d in raw_dirs]
+#    data_dirs = [d for d in data_dirs if os.path.exists(d)]
+#    merge = merge_contents(data_dirs, UTC_range)
+#    if len(merge) > 0:
+#        first = os.path.basename(merge[0]).split('.')[0]
+#        last = os.path.basename(merge[-1]).split('.')[0]
+#    else:
+#        first = None
+#        last = None
+#    return(first, last, merge)
+#
+#
+#def registry_survey(user_id, survey_id, raw_dirs, UTC_range = None):
+#    '''
+#    In some cases, downloaded Beiwe data may be located in multiple locations.
+#    These locations may contain duplicate filenames.
+#    This function collects all filepaths for a user's survey data, drops duplicates, and chooses newer (larger) files whenever possible.
+#    
+#    Args:
+#        user_id (str):  Beiwe user id.
+#        survey_id (str):  Beiwe tracking survey id.
+#        raw_dirs (list):  List of paths to raw data directories.
+#        UTC_range (list or Nonetype): Optional.  
+#            Ordered pair of date/times in filename_time_format, [start, end].
+#            If not None, ignore files before start and after end.
+#
+#    Returns:        
+#        first, last (str): Date/times of first and last files in merge.
+#        merge (OrderedDict):  Keys are 'survey_answers', 'survey_timings'.
+#            Values are merged files for the corresponding data stream.
+#    '''
+#    if type(raw_dirs) is str: raw_dirs = [raw_dirs]
+#    merge = OrderedDict()
+#    first_dts = []
+#    last_dts = []
+#    for s in ['survey_answers', 'survey_timings']:               
+#        data_dirs = [os.path.join(os.path.join(os.path.join(d, user_id), s), survey_id) for d in raw_dirs]
+#        data_dirs = [d for d in data_dirs if os.path.exists(d)]
+#        merge[s] = merge_contents(data_dirs, UTC_range)
+#        if len(merge[s]) > 0:
+#            first_dts.append(os.path.basename(merge[s][0]).split('.')[0])
+#            last_dts.append(os.path.basename(merge[s][-1]).split('.')[0])
+#    if len(first_dts) > 0:
+#        first = min(first_dts)
+#        last = max(last_dts)
+#    else:
+#        first = None
+#        last = None
+#    return(first, last, merge)
+#
+#
+#def registry_audio(user_id, audio_id, raw_dirs, UTC_range = None):
+#    '''
+#    In some cases, downloaded Beiwe data may be located in multiple locations.
+#    These locations may contain duplicate filenames.
+#    This function collects all filepaths for a user's audio survey data, drops duplicates, and chooses newer (larger) files whenever possible.
+#    
+#    Args:
+#        user_id (str):  Beiwe user id.
+#        audio_id (str):  Beiwe audio survey id.
+#        raw_dirs (list):  List of paths to raw data directories.
+#        UTC_range (list or Nonetype): Optional.  
+#            Ordered pair of date/times in filename_time_format, [start, end].
+#            If not None, ignore files before start and after end.
+#
+#    Returns:        
+#        first, last (str): Date/times of first and last files in merge.
+#        merge (list):  List of paths to files.
+#    '''
+#    if type(raw_dirs) is str: raw_dirs = [raw_dirs]
+#    data_dirs = [os.path.join(os.path.join(os.path.join(d, user_id), 'audio_recordings'), audio_id) for d in raw_dirs]
+#    data_dirs = [d for d in data_dirs if os.path.exists(d)]
+#    merge = merge_contents(data_dirs, UTC_range)
+#    if len(merge) > 0:
+#        first = os.path.basename(merge[0]).split('.')[0]
+#        last = os.path.basename(merge[-1]).split('.')[0]
+#    else:
+#        first = None
+#        last = None
+#    return(first, last, merge)
+#
+#
+#def make_registry(user_id, raw_dirs, UTC_range = None):
+#    '''
+#    Merges all data streams for a user.
+#
+#    Args:
+#        user_id (str):  Beiwe user id.
+#        raw_dirs (list):  List of paths to raw data directories.
+#        UTC_range (list or Nonetype): Optional.  
+#            Ordered pair of date/times in filename_time_format, [start, end].
+#            If not None, ignore files before start and after end.
+#
+#    Returns:        
+#        merge (OrderedDict):  
+#            For keys 'first', 'last':  Values are date/time of first or last observations.
+#            For keys 'passive', 'tracking', 'audio': Values are corresponding merged file lists.
+#    '''
+#    if type(raw_dirs) is str: raw_dirs = [raw_dirs]
+#    # get all survey ids and names of data streams
+#    data_streams = []
+#    survey_ids = []
+#    audio_ids = []
+#    for d in raw_dirs:
+#        for top, dirs, filenames in os.walk(d):            
+#            if user_id in top:
+#                if 'audio' in top:                
+#                    audio_ids.append(os.path.basename(top))                
+#                elif 'survey' in top:
+#                    survey_ids.append(os.path.basename(top))
+#                else:
+#                    data_streams.append(os.path.basename(top))
+#    data_streams = list(set([i for i in data_streams if user_id not in i]))
+#    survey_ids = list(set([i for i in survey_ids if 'survey' not in i]))    
+#    audio_ids = list(set([i for i in audio_ids if 'audio' not in i]))    
+#    # merge everything
+#    first_dts = []
+#    last_dts = []
+#    merge_p = OrderedDict()
+#    merge_s = OrderedDict()
+#    merge_a = OrderedDict()
+#    for s in data_streams:
+#        f, l, m = registry_passive(user_id, s, raw_dirs, UTC_range)
+#        first_dts.append(f)
+#        last_dts.append(l)
+#        merge_p[s] = m
+#    for s in survey_ids:
+#        f, l, m = registry_survey(user_id, s, raw_dirs, UTC_range)        
+#        first_dts.append(f)
+#        last_dts.append(l)        
+#        merge_s[s] = m
+#    for s in audio_ids:
+#        f, l, m = registry_audio(user_id, s, raw_dirs, UTC_range)            
+#        first_dts.append(f)
+#        last_dts.append(l)                
+#        merge_a[s] = m
+#    first_dts = [i for i in first_dts if not i is None]
+#    last_dts = [i for i in last_dts if not i is None]
+#    if len(first_dts) > 0:
+#        first = min(first_dts)
+#        last = max(last_dts)
+#    else:
+#        first = None
+#        last = None
+#    merge = OrderedDict(zip(['first', 'last', 'passive', 'tracking', 'audio'], 
+#                            [first, last, merge_p, merge_s, merge_a]))
+#    return(merge)
 
 

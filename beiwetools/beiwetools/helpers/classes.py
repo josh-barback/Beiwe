@@ -142,7 +142,7 @@ class Summary():
             if type(c) is list:
                 c = str(c).replace("'", "")[1:-1]
             # handle int, bool, str
-            if type(c) in [int, bool, str]:
+            if type(c) in [int, bool, str, float]:
                 c = str(c)
                 if do_rules or len(c) > max_width - len(k) - len(sep) - (level*indent):
                     if do_rules:

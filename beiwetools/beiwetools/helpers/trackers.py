@@ -436,7 +436,7 @@ class Welford(StatsTracker):
 #        return(d)   
 
 
-trackers = OrderedDict([('SamplingSummary', SamplingSummary)
+trackers = OrderedDict([('SamplingSummary', SamplingSummary),
                         ('HistogramTracker', HistogramTracker),
                         ('CategoryTracker', CategoryTracker),
                         ('RangeTracker', RangeTracker),
