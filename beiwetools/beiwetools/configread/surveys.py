@@ -119,7 +119,12 @@ class AudioSurvey(BeiweSurvey):
             self.prompt = self.raw['content'][0]['prompt']
         except:
             self.prompt = None
-        if len(self.raw['content']) > 1 or len(self.raw['content'][0].keys()) > 1:
+        warning = False
+        if len(self.raw['content']) > 1: warning = True
+        if len(self.raw['content']) == 1:
+            if len(self.raw['content'][0].keys()) > 1:
+                warning = True
+        if warning:
             flag = 'Found unknown content for audio survey id %s' % self.identifier
             beiweconfig.warnings.append(flag)
             logger.warning(flag)

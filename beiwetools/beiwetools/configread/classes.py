@@ -89,6 +89,7 @@ class BeiweConfig():
             self.identifier = self.raw['device_settings']['_id']['$oid']
         else:
             self.identifier = self.raw['device_settings']['id']
+        if isinstance(self.identifier, int): self.identifier = str(self.identifier)
         # get study name
         if self.identifier in self.name_assignments:
             self.name = self.name_assignments[self.identifier]

@@ -1,21 +1,20 @@
-'''
-Classes for working with directories of raw Beiwe data.
+'''Classes for working with directories of raw Beiwe data.
+
+See examples/mange_example.ipynb for sample usage.
 '''
 import os
 import logging
+
+from humanize import naturalsize
 from collections import OrderedDict
 
-from beiwetools.configread import BeiweConfig
-from beiwetools.helpers.time import (to_timestamp, reformat_datetime, day_ms,
-                                     date_time_format, filename_time_format)
+from beiwetools.helpers.time import summarize_UTC_range, local_now
 from beiwetools.helpers.classes import Summary
-from beiwetools.helpers.functions import (read_json, write_json, setup_directories, 
-                                          setup_csv, write_to_csv,
-                                          check_same, sort_by, join_lists)
+from beiwetools.helpers.functions import check_same, sort_by, join_lists, read_json
+from beiwetools.configread.classes import BeiweConfig
 
-from .headers import identifiers_header, user_summary_header
-from .functions import (passive_data, passive_available, survey_data,
-                        check_dirs, merge_contents, get_survey_ids)
+from .headers import identifiers_header, info_header
+from .functions import *
 
 
 logger = logging.getLogger(__name__)
@@ -23,171 +22,295 @@ logger = logging.getLogger(__name__)
 
 class BeiweProject():
     '''
-    Class for organizing directories of raw Beiwe data.
+    Class for organizing directories of raw Beiwe data from multiple users.
 
-    Args:
-        None
-                
     Attributes:
         ids (list):  List of all available user IDs, sorted by first observation.
+        raw_dirs (list): Paths to directories where raw data are found.
         data (OrderedDict):  Keys are Beiwe user ids, values are UserData objects.
         first, last (str):  
             Date/time of first and last observations across all users.
             Formatted as '%Y-%m-%d %H_%M_%S'.
-        lists (OrderedDict):
-            Useful lists.  
-            May be saved to JSON format, therefore should only contain primitive types.
-            By default, includes:            
-                iOS_users (list): List of all users with iPhones.
-                Android_users (list): List of all users with Android phones.
         passive (list):        
             List of available passive data streams across all users.
         surveys (OrderedDict):
             Keys are raw survey data types (e.g. 'audio_recordings', 'survey_answers').
             Values are lists of corresponding survey identifiers.
-        dictionaries (OrderedDict): 
-            Dictionaries used for looking up user attributes.
+        lists (OrderedDict):
+            Useful lists.  
+            May be saved to JSON format, therefore should only contain primitive types.
+            By default, includes:            
+                'iOS': List of all users who only use iPhones.
+                'Android': List of all users who only use Android phones.
+        lookup (OrderedDict): 
+            Dictionaries used for looking up user attributes and object names.
             May be saved to JSON format, therefore should only contain primitive types. 
-            By default, includes keys 'default_name', 'os', 'configuration', UTC_range.
-        flags (OrderedDict): Values are lists of flagged user IDs.  Keys are:
+            Values should be dictionaries in which keys are user IDs or object identifiers.
+            Created with user lookups: 'study_name', 'default_name', 'os', 'configuration', 'UTC_range'
+            Also created with an object lookup: 'object_name'.
+            Note:
+                'study_name' and 'object_name' are assembled from configuration name assignments.
+                If there are conflicts, later configuration paths take precedence.
+        flags (OrderedDict): Values are lists of flagged identifiers.  Keys are:
             'ignored_users': User IDs in raw_dirs who are not included.
-            'without_data': User IDs with no data streams other than identifiers.
-            'irregular_directories': See UserData attributes.
-            'multiple_devices': See DeviceInfo attributes.
-            'multiple_os': See DeviceInfo attributes.
-        use_name (str): A key in dictionaries.
-            This is the dictionary that will be used to generate a summary.
+            'no_registry': User IDs for which a UserData object could not be created.
+            'without_data': User IDs with no data.
+            'no_identifiers': User IDs with no identifiers files.
+            'irregular_directories': User IDs with unregistered survey data from irregular directories.
+            'multiple_devices': User IDs with more than one associated device.
+            'unknown_os': User IDs with data from both OS or unknown OS.
+            'unnamed_objects': Object identifiers that don't have default names.
         summary (Summary):  Project overview for printing.
+        info (OrderedDict):  Some organized information about the project.
     '''
-    def __init__(self):
-        self.configuration = None
-        self.ids = []
-        self.data = OrderedDict()
-        self.first = None
-        self.last = None
-        self.lists = OrderedDict([('iOS_users', []), ('Android_Users', [])])
-        self.passive = []
-        self.surveys = OrderedDict()
-        self.dictionaries = OrderedDict([('os', OrderedDict()), 
-                                         ('default_name', OrderedDict())])
-        flag_keys = ['ignored_users', 'without_data', 'irregular_directories',
-                     'multiple_device', 'multiple_os']
-        self.flags = OrderedDict(zip(flag_keys,
-                                     [[], [], [], [], []]))
-        self.use_name = 'default_name'
-        self.summary = None
-       
-    def create(self, raw_dirs, user_ids = 'all', 
+    @classmethod
+    def create(cls, raw_dirs, user_ids = 'all', 
                configuration = None, UTC_range = None,
-               include_passive = passive_data, include_surveys = survey_data):
+               user_names = {}):
         '''
-        Generate records from directories of raw Beiwe data.
+        Create a new BeiwePoject.
 
         Args:
-            raw_dirs (str or list): Paths to raw data directories.
-            user_ids (list): Beiwe user IDs (str) to include.
-            configuration (str or OrderedDict or NoneType): 
-                Optional assignment of configuration file to user IDs.
-                Can be a path to a study configuration (str) for all users.
-                Or a dictionary; keys are user IDs and values are paths to configurations.
-            UTC_range (list or OrderedDict or NoneType):
-                Optional assignment of follow-up periods to user IDs.
-                Can be a pair of date/times in filename_time_format, [start, end] for all users.
-                Or a dictionary; keys are user IDs and values are ranges for each user.                                
-            include_passive (list): Which passive data directories to read.               
-            include_survey (list): Which survey data directories to read.
+            raw_dirs (str or list):  
+                Paths to directories that may contain raw data from this user.
+            user_ids (str or list):
+                If 'all' then all available users are added to the project.
+                Otherwise, one or more user ids to include.                
+            configuration (Nonetype or str or list or dict): Optional.
+                Can be None, or:
+                - Path to a configuration file,
+                - List of paths to configuration files,
+                - Dictionary:
+                    Keys are user_ids,
+                    Values are lists of configuration files.
+            UTC_range (Nonetype or list or dict): Optional.  Can be:
+                - None, in which case all available data are registered.                
+                - Ordered pair of date/times in filename_time_format, [start, end].
+                  Files before start and after end are ignored.
+                - Dictionary of user IDs (keys) and date/time pairs (values).
+            user_names (dict): Optional. 
+                Keys are user IDs, values are human-readable identifiers.
+                If not empty, will be set as default user names.
             
         Returns:
-            None        
+            self (BeiweProject)
         '''
-        if type(raw_dirs) is str:  raw_dirs = [raw_dirs]
-        available_ids = []
-        for d in raw_dirs:
-            available_ids += os.listdir(d)
-        available_ids = sorted(list(set(available_ids)))
-        if user_ids == 'all':
-            user_ids = available_ids
-        else:
-            self.flags['ignored_users'] = [i for i in available_ids if not i in user_ids]
-        self.dictionaries['configuration'] = configuration
-        self.dictionaries['UTC_range'] = UTC_range
+        self = cls.__new__(cls)        
+        # format directories and ID lists
+        if isinstance(raw_dirs, str): raw_dirs = [raw_dirs]
+        self.raw_dirs = raw_dirs
+        available_ids = list(set(join_lists([os.listdir(d) for d in self.raw_dirs])))
+        available_ids.sort()
+        if user_ids == 'all': user_ids = available_ids            
+        elif isinstance(user_ids, str):
+            user_ids = [user_ids]
+        # set up lists
+        self.lists = OrderedDict(zip(['iOS', 'Android'], [[], []]))
+        # configuration and UTC range dictionaries
+        self.lookup = OrderedDict(zip(['configuration', 'UTC_range'], 
+                                      [coerce_to_dict(configuration, user_ids), 
+                                       coerce_to_dict(UTC_range, user_ids)]))                
+        # user name dictionary
+        self.lookup['default_name'] = OrderedDict(user_names)
+        # get object names from configuration files
+        self.get_names(user_ids)
         # get user data registries
-        for i in user_ids:
-            try:
-                CR = [configuration, UTC_range]
-                cr = [None, None]
-                for j in range(2):
-                    if   isinstance(CR[j], str): cr[j] = CR[j]
-                    elif isinstance(CR[j], (dict, OrderedDict)): cr[j] = CR[j][i]                
-                temp = UserData()
-                temp.create(raw_dirs, i, 
-                            UTC_range = cr[1], 
-                            configuration = cr[0],
-                            include_passive = include_passive, 
-                            include_surveys = include_surveys)
-                self.data[i] = temp
-            except:
-                logger.warning('Unable to create registry for %s.' % i)
-                self.flags['ignored_users'].append(i)
-        # update lists and dictionaries
-        have_ids = list(self.data.keys())
-        self.ids = sort_by(have_ids, [self.data[i].first for i in have_ids])
         data_range = []
-        n_ids = len(self.ids)
-        n_digits = len(str(n_ids))
-        for i in range(n_ids):
-            d = self.data[self.ids[i]]
-            if not d.first is None:
-                data_range += [d.first, d.last]
-            # os dictionary
-            self.dictionaries['os'][d.id] = d.device.os
-            # default names
-            count = str(i+1).zfill(n_digits)
-            self.dictionaries['default_name'][d.id] = 'Participant ' + count
-            # os lists
-            self.lists[d.device.os + '_users'].append(d.id)
-            # data streams
-            self.passive += list(d.passive.keys())
-            for k in d.surveys():
-                if k in self.surveys.keys():
-                    self.surveys[k] += list(d.surveys[k].keys())
-                else:
-                    self.surveys[k] = list(d.surveys[k].keys())        
-        # drop duplicate data streams
-        self.passive = sorted(list(set(self.passive)))
-        for k in self.surveys.keys():
-            self.surveys[k] = sorted(list(set(self.surveys[k])))
-        # get first and last observations
+        passive = []
+        surveys = OrderedDict()
+        self.data = OrderedDict()
+        self.lookup['os'] = OrderedDict()                
+        flag_labels = ['ignored_users', 'no_registry', 'without_data', 
+                       'no_identifiers', 'irregular_directories', 
+                       'multiple_devices', 'unknown_os', 'unnamed_objects']
+        self.flags = OrderedDict(zip(flag_labels, 
+                                     [[] for j in flag_labels]))
+        for i in available_ids:
+            if not i in user_ids:
+                self.flags['ignored_users'].append(i)
+            else:
+                try:
+                    temp = UserData.create(i, raw_dirs,
+                                           self.lookup['UTC_range'][i],
+                                           self.lookup['default_name'],
+                                           self.lookup['object_name'])
+                    self.data[i] = temp
+                except:
+                    logger.warning('Unable to create registry for %s.' % i)
+                    self.flags['no_registry'].append(i)
+        # update records
+        for i in self.data:
+            temp = self.data[i]
+            if not temp.first is None: data_range += [temp.first, temp.last]
+            # get device and OS info
+            d = temp.device
+            self.lookup['os'][i] = d.os
+            if d.os in ['iOS', 'Android']: self.lists[d.os].append(i)
+            else: self.flags['unknown_os'].append(i)
+            if d.unique > 1: self.flags['multiple_devices'].append(i)
+            # get registry info
+            info = temp.info
+            if info['raw_file_count'] == 0: 
+                self.flags['without_data'].append(i)
+            if info['irregular_directories'] > 0: 
+                self.flags['irregular_directories'].append(i)
+            # get passive registry
+            p = temp.passive
+            if p['identifiers']['count'] == 0:
+                self.flag['no_identifiers'].append(i)
+            passive += [k for k in p.keys() if p[k]['count'] > 0] 
+            # get survey registry
+            s = temp.surveys
+            for k in s:
+                sids = list(s[k]['ids'].keys())
+                if len(sids) > 0:
+                    if k in surveys: surveys[k] += sids                          
+                    else: surveys[k] = sids
+        # bookkeeping
         data_range.sort()
         if len(data_range) > 0:
             self.first, self.last = data_range[0], data_range[-1]
-        # get summary for printing
-        self.summarize()
+        else:
+            self.first, self.last = None, None
+        self.passive = sorted(list(set(passive)))
+        self.surveys = OrderedDict()        
+        for k in surveys:
+            self.surveys[k] = sorted(list(set(surveys[k])))
+        # sort user ids
+        have_ids = list(self.data.keys())
+        self.ids = sort_by(have_ids, [str(self.data[i].first) + str(self.data[i].last) for i in have_ids])
+        # get default names and summarize
+        if len(self.lookup['default_name']) == 0:
+            temp = OrderedDict()
+            n_ids = len(self.ids)  
+            n_digits = len(str(n_ids))
+            for j in range(n_ids):
+                i = self.ids[j]
+                count = str(j+1).zfill(n_digits)
+                self.lookup['default_name'][i] = 'Participant ' + count
+            self.update_names(user_names = temp, object_names = None)
+        else:
+            self.summarize()
         logging.info('Finished generating study records for %d of %d users.' % (len(self.data), len(user_ids)))
-        
-    def load(self, load_dir):
+        return(self)
+
+    def update_configuration(self, configuration):
         '''
-        Load data records from json files.
+        Set new configuration files for project.
+        Overwrites old configuration files.
+        '''
+        self.lookup['configuration'] = coerce_to_dict(configuration, self.ids)
+        self.get_names()
+        self.update_names()
+        logger.info('Updated project configuration files.')
         
+    def get_names(self, user_ids = None):
+        '''
+        Read configuration files. Get study names and object names.
+        '''
+        if user_ids is None: user_ids = self.ids
+        # user name dictionary
+        temp = OrderedDict()
+        for i in self.lookup['configuration']:
+            config_paths = self.lookup['configuration'][i]
+            for p in config_paths:
+                try: temp[i] = BeiweConfig(p).name
+                except: temp[i] = None 
+        self.lookup['study_name'] = temp
+        if len(temp) > 0:
+            logger.info('Finished reading study names.')
+        # object name dictionary
+        all_configs = join_lists([self.lookup['configuration'][i] for i in user_ids])
+        all_configs = list(OrderedDict.fromkeys(all_configs)) # drop duplicates but keep order
+        temp = OrderedDict()
+        for p in all_configs: temp.update(BeiweConfig(p).name_assignments)
+        if len(temp) != len(set(temp.values())):
+            logger.warning('Study object names are not unique.  Attempting to prefix object names with study names.')
+            temp = OrderedDict()
+            for p in all_configs: 
+                c = BeiweConfig(p)
+                for k in c.name_assignments:
+                    if c.name == c.name_assignments[k]: # if k is the study id, don't add prefix
+                        temp[k] = c.name
+                    else: temp[k] = c.name + ' - ' + c.name_assignments[k]
+            if len(temp) != len(set(temp.values())):
+                logger.warning('Object names are still not unique. Object names will be ignored.')
+                temp = OrderedDict()                
+        self.lookup['object_name'] = temp
+        if len(temp) > 0:
+            logger.info('Finished reading object names.')
+        
+    def update_names(self, user_names = None, object_names = None):
+        if user_names   is not None: self.lookup['default_name'] = user_names
+        if object_names is not None: self.lookup['object_name' ] = object_names            
+        self.flags['unnamed_objects'] = []
+        for i in self.data:
+            self.data[i].summarize(self.lookup['default_name'], 
+                                   self.lookup['object_name'])        
+        self.summarize()            
+        logger.info('Updated user name assignments.')
+
+    def summarize(self, object_names = 'object_name'):
+        '''
+        Generate human-readable summaries.
+        '''
+        if isinstance(object_names, str): names = self.lookup[object_names]
+        else: names = object_names
+        reformat, observation_days, unit = summarize_UTC_range([self.first, self.last])        
+        first, last = reformat
+        unique_study_names = sorted(list(set(list(self.lookup['study_name'].values()))))
+        if len(unique_study_names) > 0: studies_text = '\n'.join(unique_study_names)
+        else: studies_text = None
+        if len(unique_study_names) > 1: studies_text = studies_text
+        overview = Summary(['Unique Beiwe Users', 'Study Name(s)', 'Raw Data Directories', 
+                             'First Observation', 'Last  Observation', 'Project Duration'],
+                           [len(self.ids), studies_text, len(self.raw_dirs), 
+                            first, last, str(round(observation_days, 1)) + ' days'])
+        devices = Summary(['iPhone Users', 'Android Users'], 
+                          [len(self.lists['iOS']), len(self.lists['Android'])])
+        flags = Summary(list(self.flags.keys()), 
+                        [len(v) for v in list(self.flags.values())])
+        user_info_keys = ['raw_file_count', 'size', 
+                          'irregular_directories', 'unregistered_files']
+        totals = []
+        for k in user_info_keys:
+            totals.append(sum([self.data[i].info[k] for i in self.ids]))
+        totals[1] = naturalsize(totals[1])        
+        registry = Summary(['Raw Files', 'Storage', 'Irregular Directories', 
+                        'Unregistered Files'], totals)        
+        passive, s_lab, s_txt = data_to_text(self.passive, self.surveys, self.data, 
+                                                  self.lookup['object_name'])
+        survey = Summary(s_lab, s_txt)
+        self.summary = Summary(['Overview', 'Device Summary', 'Warning Flags',
+                                'Registry Summary', 'Passive Data', 'Survey Data'], 
+                               [overview, devices, flags, registry, passive, survey])
+           
+    @classmethod
+    def load(cls, directory):
+        '''
+        Load an exported BeiweProject from json files.
+
         Args:
-            load_dir (str):  Path to directory of study records.
+            directory (str): Path to directory with an exported BeiweProject.
             
         Returns:
-            None
+            self (BeiweProject)
         '''
-        merge_dir = os.path.join(load_dir, 'registries')
-        self.ids = sorted([f.split('_')[0] for f in os.listdir(merge_dir)])
-        for i in self.user_ids:
-            temp = UserData(i)
-            temp.load(merge_dir)
+        self = cls.__new__(cls)        
+        load_manage(self, directory)
+        registry_dir = os.path.join(directory, 'records', 'registries')
+        self.data = OrderedDict()
+        load_ids = sorted(self.ids)
+        for i in load_ids:
+            filepath = os.path.join(registry_dir, i + '_registry.json')
+            temp = UserData.load(filepath, 
+                                 user_names =   self.lookup['default_name'], 
+                                 object_names = self.lookup['object_name'])
             self.data[i] = temp
-        self.name_assignments = read_json(os.path.join(load_dir, 'dictionaries.json'))
+        self.summarize()
+        return(self)
 
-
-    def summarize(self):
-        pass
-
-    def export(self, name, directory):
+    def export(self, name, directory, track_time = True):
         '''
         Save json files with study records.  
         Overwrites pre-existing records.
@@ -197,35 +320,41 @@ class BeiweProject():
             directory (str): Where to save folder of records.
             
         Returns:
-            None
+            path
         '''   
-
-
-        folders = []
-        path = os.path.join(directory, name)
-        merge_path = os.path.join(path, 'registries')
-        identifiers_path = os.path.join(path, 'identifiers')
-        setup_directories([path, merge_path, identifiers_path])
-
-
-        self.ids
-        self.data
-        self.first
-        self.last
-        self.lists
-        self.passive
-        self.surveys
-        self.dictionaries
-        self.flags
-        self.use_name
-
-
-
-        write_json(self.dictionaries, 'dictionaries', path)
-        for i in self.user_ids:
-            self.data[i].to_json(merge_path)
-            self.data[i].device.export(identifiers_path)
-            
+        directory = os.path.join(directory, name)
+        if track_time:
+            temp = 'project export from ' + local_now()
+            directory = os.path.join(directory, temp.replace(' ', '_'))
+        export_manage(self, directory)
+        return(directory)
+        
+    def assemble(self, streams, user_ids = 'all'):
+        '''
+        Get a single dictionary with paths to all users' files for given streams.
+        '''
+        if user_ids == 'all': have_ids = self.ids
+        else: have_ids = [i for i in user_ids if i in self.ids]        
+        if isinstance(streams, str):
+            if streams == 'passive': 
+                streams = self.passive
+            elif streams == 'surveys':
+                temp = []
+                for k in self.surveys: 
+                    temp += [(k, sid) for sid in self.surveys[k]]
+                streams = temp
+            elif streams in self.surveys:
+                k = streams
+                streams = [(k, sid) for sid in self.surveys[k]]
+            else: streams = [streams]
+        a = OrderedDict.fromkeys(have_ids)
+        for i in a:
+            a[i] = self.data[i].assemble(streams)
+        return(a)        
+        
+    def plot():
+        pass
+        
     def __eq__(self, other):
         return(check_same(self, other, to_check = 'all'))
 
@@ -236,16 +365,25 @@ class UserData():
         
     Attributes:
         id (str):  Beiwe user id.
-        configuration (str): Optional path to a configuration file.
         passive (OrderedDict):  Keys are passive data streams.
-            Each value is either:
-                A list of all available files for the corresponding streams.
-                Or a string describing missing data condition.
+            Each value is an ordered dictionary with keys and values:
+                'flag':  Values may be:
+                    'not available for OS' - Data stream doesn't exist for this device type.
+                    'not found' - Data stream directory is missing or empty.
+                    None - Data stream exists for the device and is not empty.
+                'count': Number of files for this data stream (int).
+                'bytes': Total size of files on disk in bytes (int).                
+                'files': List of all available files for the data stream.
         surveys (OrderedDict):  
-            Keys are names of survey directories (e.g. 'audio_recordings', 'survey_timings'.
-            Values are ordered dictionaries: 
-                Keys are survey identifiers.
-                Values are lists of all available files for the corresponding survey.
+            Keys are names of survey directories (e.g. 'audio_recordings', 'survey_timings').
+            Each value is an ordered dictionary with keys and values:
+                'flag':  None or 'not found'.
+                'ids': 
+                    An ordered dictionary. Keys are survey identifiers.  
+                    Each value is an ordered dictionary with keys and values:
+                        'count': Number of files for this data stream (int).
+                        'bytes':    Total size of files on disk in bytes (int).                
+                        'files': List of all available files for the corresponding survey.
         first, last (str):  
             Date/time of first and last observations.
             Formatted as '%Y-%m-%d %H_%M_%S'.
@@ -257,203 +395,138 @@ class UserData():
             Irregular directories are survey directories that contain raw data files.
         device (DeviceInfo): Represents contents of the user's identifier files.
         summary (Summary): Overview of user data for printing.
-        info (
+        info (OrderedDict): See headers.info_header for details.
     '''
-    def __init__(self):
-        self.id = None
-        self.configuration = None
-        self.passive = None
-        self.surveys = None
-        self.first = None
-        self.last  = None
-        self.UTC_range = None
-        self.not_registered = []
-        self.device = None
-        self.summary = None
-        self.info = None
-
-    def create(self, user_id, raw_dirs, 
-               UTC_range = None, configuration = None,
-               passive_include = passive_available['both'],
-               surveys_include = survey_data):
+    @classmethod
+    def create(cls, user_id, raw_dirs, UTC_range = None,
+               user_names = {}, object_names = {}):
         '''
-        Generate records from directories of raw Beiwe data.
+        Generate user registry from directories of raw Beiwe data.
 
         Args:
-            user_id (str):  Beiwe user id.
+            user_id (str) = Beiwe user ID.
             raw_dirs (str or list):  
                 Paths to directories that may contain raw data from this user.
             UTC_range (list or Nonetype): Optional.  
                 Ordered pair of date/times in filename_time_format, [start, end].
                 If not None, ignore files before start and after end.
-            configuration (str): Optional path to a configuration file.
-            passive_include (list): Which passive data directories to read.               
-            survey_include (list): Which survey data directories to read.
-            
+            user_names, object_names (dict):
+                Optional dictionaries with name assignments.
+
         Returns:
-            None        
+            self (UserData)
         '''
+        self = cls.__new__(cls) 
         self.id = user_id
+        if UTC_range == []: UTC_range = None
         self.UTC_range = UTC_range
-        self.configuration = configuration
         if isinstance(raw_dirs, str): raw_dirs = [raw_dirs]
-        user_dirs = [os.path.join(d, self.id) for d in raw_dirs]
         data_range = []
         # get identifiers and device
-        to_check = [os.path.join(d, 'identifiers') for d in user_dirs]
-        not_exist, not_dir, empty, not_empty = check_dirs(to_check)        
-        if len(not_empty) > 0: merge = merge_contents(not_empty, self.UTC_range)
-        else:
-            logger.warning('No identifiers found for %s in this range.' % self.id)        
-            try:
-                merge = [merge_contents(not_empty, ['1970-01-01 00_00_00', self.UTC_range[1]])[-1]]
-                logger.warning('Using last observed identifiers file for %s.' % self.id)
-            except:
-                merge = 'not_found'
-                logger.warning('No identifiers found for %s.' % self.id)        
-        self.passive['identifiers'] = merge
-        try:
-            self.device = DeviceInfo(self.passive['identifiers'])
-            os = self.device.os
-        except:
+        self.passive = OrderedDict()
+        self.passive['identifiers'] = identifiers_registry(self.id, raw_dirs, self.UTC_range)        
+        self.device = DeviceInfo(self.passive['identifiers']['files'])
+        phone_os = self.device.os
+        if phone_os is None:
             logger.warning('Unable to get device info for ' + self.id + '.')
-            os = 'both'
+            phone_os = 'both'
         # get passive data registry
-        for s in passive_available['both']:
-            if not s in passive_available[os]:
-                self.passive[s] = 'not available for OS'
-            elif not s in passive_include:
-                self.passive[s] = 'ignored'
-            else:
-                to_check = [os.path.join(d, s) for d in user_dirs]
-                not_exist, not_dir, empty, not_empty = check_dirs(to_check)          
-                if len(not_empty) > 0: merge = merge_contents(not_empty, self.UTC_range)        
-                else: merge = 'not_found'
-                data_range += [os.path.basename(merge[0]), 
-                               os.path.basename(merge[-1])]
-                self.passive[s] = merge
+        data_range, pr = passive_registry(self.id, phone_os, raw_dirs, self.UTC_range)
+        self.passive.update(pr)
         # get survey data registry
-        for sd in survey_data:
-            if sd in surveys_include:
-                survey_dirs = [os.path.join(d, sd) for d in user_dirs]
-                sids, files = get_survey_ids(survey_dirs)
-                self.not_registered += files
-                if len(sids) == 0:
-                    self.surveys[sd] = 'not_found'
-                else:
-                    self.surveys[sd] = OrderedDict.fromkeys(sids)
-                    for s in sids:
-                        to_check = [os.path.join(d, s) for d in survey_dirs]                        
-                        not_exist, not_dir, empty, not_empty = check_dirs(to_check)          
-                        if len(not_empty) > 0: 
-                            merge = merge_contents(not_empty, self.UTC_range)        
-                            data_range += [os.path.basename(merge[0]), 
-                                           os.path.basename(merge[-1])]
-                        else: merge = 'not_found'
-                    self.surveys[sd][s] = merge
+        survey_range, self.surveys, self.not_registered = survey_registry(self.id, raw_dirs, self.UTC_range)
+        data_range += survey_range
         # get first & last observation datetimes
         data_range.sort()        
         if len(data_range) > 0:
-            self.first = data_range[0].split('.')[0]
-            self.last = data_range[-1].split('.')[0]
+            self.first = data_range[0]
+            self.last = data_range[-1]
+        else: self.first, self.last = None, None
         # get summary
-        self.summarize()
+        self.summarize(user_names, object_names)
         logger.info('Created raw data registry for Beiwe user ID %s.' % self.id)
+        return(self)
 
-    def to_list(self, user_names = {}, object_names = {}):
+    def summarize(self, user_names, object_names, ndigits = 1):
         '''
         Collect some information and summary stats.
-        '''
-        if self.id in user_names.keys():
-            user_name = user_names[self.id]
-        else: user_name = None
-        study_name = None
-        if len(object_names) == 0:
-            try:
-                config = BeiweConfig(self.configuration)
-                study_name = config.name.replace('_', ' ')
-                object_names = config.name_assignments
-            except:
-                logger.warning('Configuration file not found for Beiwe user ID %s.' % self.id)
-        # followup
-        if not self.UTC_range is None:
-            begin, end = [reformat_datetime(t, filename_time_format, date_time_format) + ' UTC' for t in self.UTC_range]
-            followup_ms = to_timestamp(self.UTC_range[1], filename_time_format) - to_timestamp(self.UTC_range[1], filename_time_format)
-            followup_days = round(followup_ms/day_ms, ndigits = 1)
-        # observations
-        if self.first is None:
-            first, last, n_days = None, None, 0
-        else:
-            first = reformat_datetime(self.first, filename_time_format, date_time_format) + ' UTC'
-            last =  reformat_datetime(self.last,  filename_time_format, date_time_format) + ' UTC'
-            observation_ms = to_timestamp(self.last, filename_time_format) - to_timestamp(self.first, filename_time_format)
-            observation_days = round(observation_ms/day_ms, ndigits = 1)
-        # 
-
-
-info = [self.id, user_name, 
-        begin, end, followup_days, 
-        first, last, observation_days,
-        raw_count, size_MB, self.device.unique, self.device.os,
-        irregular_directories, len(self.not_registered),
-        study_name, self.configuration_file]
-        
-        
-        project_labels = ['Study Name', 'Configuration File Path']
-        project_items = [study_name, self.configuration]
-        if not self.UTC_range is None:
-            project_labels += ['Begin', 'End']
-            project_items += [fd[0], fd[1]]
-        project  = Summary(project_labels, project_items)
-        if self.first is None:
-            first, last, n_days = None, None, 0
-        else:
-            first = reformat_datetime(self.first, filename_time_format, date_time_format) + ' UTC'
-            last =  reformat_datetime(self.last,  filename_time_format, date_time_format) + ' UTC'
-            n_ms = to_timestamp(self.last, filename_time_format) - to_timestamp(self.first, filename_time_format)
-            n_days = round(n_ms/day_ms, ndigits = 1)
-        followup = Summary(['First Observation', 'Last  Observation', 'Total Days', 'Raw Files', 'Storage'],
-                           [first, last, n_days, None, None])
-        device = Summary(['Number of Devices', 'Current Phone OS', 'Found Multiple Operating Systems'],
-                         [self.device.unique, self.device.os, self.device.os_flag])
-        registry = Summary(['Irregular Directories', 'Unregistered Files'],
-                           [len(self.flags['irregular_directories']), len(self.not_registered)])
-        labels = ['Project', 'Follow-Up Summary', 'Device Records', 'Registry Issues']
-        items = [project, followup, device, registry]
-        self.summary = Summary(labels, items, header = user_name)
-
-
-    def summarize(self, user_names = {}, object_names = {}):
-        '''
-        Summarize user data for documentation.
-
-        Args:
-            user_names (dict): Optional name assignments for Beiwe user IDs.
-            object_names (dict): Optional name assignments for Beiwe surveys.
-        '''
-
-    def load(self, directory):
-        '''
-        Load data records from a json file.
         
         Args:
-            directory (str):  
-                Directory containing an exported UserData object.
+            user_names, object_names (dict):
+                Dictionaries with name assignments.
+            ndigits (int): Number of digits for rounding.
             
         Returns:
-            None
+            None            
         '''
-        temp = read_json(os.path.join(directory, self.id + '_registry.json'))
-        self.passive   = temp['passive']
-        self.surveys   = temp['surveys']
-        self.first     = temp['first']
-        self.last      = temp['last']  
-        self.UTC_range = temp['UTC_range']
-        self.device    = DeviceInfo(self.passive['identifiers'])
-        self.not_registered = temp['not_registered']
-        self.configuration  = temp['configuration']
-        self.summarize()
- 
+        try: user_name = user_names[self.id]
+        except: user_name = None
+        # followup
+        reformat, project_days, unit = summarize_UTC_range(self.UTC_range)        
+        begin, end = reformat        
+        # observations
+        reformat, observation_days, unit = summarize_UTC_range([self.first, self.last])        
+        first, last = reformat
+        # summarize raw files
+        raw_count, size = 0, 0
+        for k in self.passive:
+            raw_count += self.passive[k]['count']
+            size += self.passive[k]['bytes']
+        # irregular directories
+        irrds = list(set([os.path.dirname(p) for p in self.not_registered]))
+        irregular_directories = len(irrds)
+        # get overview        
+        info = [self.id, user_name, 
+                begin, end, project_days, 
+                first, last, observation_days,
+                raw_count, size, self.device.unique, self.device.os,
+                irregular_directories, len(self.not_registered)]
+        self.info = OrderedDict(zip(info_header, info))
+        # get summary
+        labels = ['Identifiers']
+        items = [Summary(['Beiwe User ID', 'User Name'], [self.id, user_name])]
+        if not self.UTC_range is None:
+            project = Summary(['Begin', 'End', 'Duration'],
+                              [begin, end, str(project_days) + ' days'])
+            labels.append('Project Range')
+            items.append(project)
+        observations = Summary(['First Observation', 'Last  Observation', 
+                                'Observation Period', 'Raw Files', 'Storage'],
+                               [first, last, str(observation_days) + ' days', 
+                                raw_count, naturalsize(size)])
+        device = Summary(['Number of Phones', 'Phone OS'],
+                         [self.device.unique, self.device.os])
+        registry = Summary(['Irregular Directories', 'Unregistered Files'],
+                           [irregular_directories, len(self.not_registered)])
+        labels += ['Raw Data Summary', 'Device Records', 'Registry Issues']
+        items += [observations, device, registry]
+        pt, s_types, s_text = registry_to_text(self.passive, self.surveys, 
+                                               self.first, self.last, object_names)
+        labels += ['Passive Data Summary', 'Survey Data Summary']
+        items += [pt, Summary(s_types, s_text)]
+        self.summary = Summary(labels, items)
+
+    @classmethod
+    def load(cls, path, user_names = {}, object_names = {}):
+        '''
+        Load user registry from a json file.
+        
+        Args:
+            path (str):  
+                Path to an exported UserData object.
+            user_names, object_names (dict):
+                Optional dictionaries with name assignments.
+            
+        Returns:
+            self (UserData)
+        '''
+        self = cls.__new__(cls)
+        load_manage(self, path)
+        self.device = DeviceInfo(self.passive['identifiers']['files'])
+        self.summarize(user_names, object_names)
+        logger.info('Loaded raw data registry for Beiwe user ID %s.' % self.id)
+        return(self)
+
     def export(self, directory):
         '''
         Saves record of merged file paths. 
@@ -461,16 +534,28 @@ info = [self.id, user_name,
         Args:
             directory (str):  Directory where json file should be saved.
         '''
-        out = OrderedDict([
-                ('id', self.id),
-                ('passive', self.passive),
-                ('surveys', self.surveys),
-                ('first', self.first),
-                ('last', self.last),
-                ('UTC_range', self.UTC_range),
-                ('flags', self.flags),
-                ('configuration', self.configuration)])
-        write_json(out, self.id + '_registry', directory)
+        export_manage(self, directory)
+
+    def assemble(self, streams):
+        '''
+        Get a dictionary with paths to user's files for given streams.
+        An item in streams can be a: 
+            passive data stream (str), 
+            ordered pair(survey type, survey identifier) (tuple).
+        '''
+        if isinstance(streams, str): streams = [streams]
+        a = OrderedDict()
+        for s in streams:
+            if isinstance(s, str):
+                if s in self.passive.keys(): a[s] = self.passive[s]['files']
+                else: a[s] = []
+            elif isinstance(s, tuple):
+                s_type, sid = s
+                if sid in self.surveys[s_type]['ids']:
+                    a[s] = self.surveys[s_type]['ids'][sid]['files']
+                else: a[s] = []
+            else: logger.warning('Check stream format; %s is neither a string nor a tuple.' % str(s))
+        return(a)   
 
     def __eq__(self, other):
         return(check_same(self, other, to_check = 'all'))
@@ -492,7 +577,7 @@ class DeviceInfo():
             Otherwise 'both'.
         unique (int): Number of unique devices that were used during followup.
     '''
-    def __init__(self, paths):
+    def __init__(self, paths = []):
         if type(paths) is str:
             paths = [paths]
         # sort paths according to file creation date
@@ -510,23 +595,27 @@ class DeviceInfo():
             if len(values) > len(keys):
                 values = values[:-2] + ['_'.join(values[-2:])]        
             # Check header
-
-
-            print(values[2])
-
-
-
             if keys != identifiers_header:
                 logger.warning('Unknown identifiers header for user ID %s' % values[2])
             self.identifiers[p] = OrderedDict(zip(keys, values))  
-        if len(list(set(self.history('device_os').values()))) == 1:
-            self.os = list(self.history('device_os').values())[0]
+        # get os
+        os_history = self.history('device_os')
+        if len(os_history) == 0: 
+            logger.warning('Initialized empty DeviceInfo object.')
+            self.os = None
+        elif len(list(set(os_history.values()))) == 1:
+            self.os = list(os_history.values())[0]
         else:
             self.os = 'both'
             logger.warning('Found multiple operating systems for user ID %s.' % values[2])
-        self.unique =  len(list(set(self.history('device_id').values())))
-        if self.unique > 1:
-            logger.warning('Found multiple devices for user ID %s.' % values[2])
+        # get device count
+        device_history = self.history('device_id')
+        if len(device_history) == 0:
+            self.unique = None
+        else:
+            self.unique =  len(list(set(device_history.values())))
+            if self.unique > 1:
+                logger.warning('Found multiple devices for user ID %s.' % values[2])
 
     def history(self, header):
         '''
@@ -542,11 +631,12 @@ class DeviceInfo():
                 Keys are sorted timestamps.
                 Values are device attributes observed at those times.        
         '''
+        history = OrderedDict()
         if not header in identifiers_header:
             logger.warning('%s isn\'t a device attribute.' % header)
-        history = OrderedDict()
-        for d in self.identifiers.values():
-            history[d['timestamp']] = d[header]
+        else:
+            for d in self.identifiers.values():
+                history[d['timestamp']] = d[header]
         # operating system history
         if header == 'device_os':
             for k in history.keys():
@@ -557,13 +647,8 @@ class DeviceInfo():
         '''
         Write all identifier information to a single csv.
         '''
-        temp = list(self.identifiers.values())[-1]
-        filename = temp['patient_id'] + '_identifiers'
-        header = ['from_file'] + list(temp.keys())
-        path = setup_csv(filename, directory, header)
-        for f in self.identifiers.keys():  
-            line = [f] + list(self.identifiers[f].values())
-            write_to_csv(path, line)
+        export_manage(self, directory)
+
             
     def __eq__(self, other):
         return(check_same(self, other, to_check = 'all'))

@@ -1,6 +1,7 @@
 from setuptools import setup, find_namespace_packages
 
 requires = ['holidays',
+            'humanize',
             'pandas',
             'pytz', 
             'seaborn',

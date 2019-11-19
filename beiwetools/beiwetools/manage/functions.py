@@ -1,12 +1,18 @@
-'''
-Classes for working with directories of raw Beiwe data.
+'''Helpers for beiwetools.manage.classes.
+
 '''
 import os
 import logging
-from collections import OrderedDict
-from beiwetools.helpers.functions import sort_by, read_json, setup_csv, write_to_csv
-from .headers import identifiers_header, user_summary_header
+import pandas as pd
 
+from humanize import naturalsize
+from collections import OrderedDict
+
+from beiwetools.helpers.time import summarize_UTC_range
+from beiwetools.helpers.functions import (sort_by, write_json, read_json, 
+                                          setup_directories, setup_csv, write_to_csv)
+
+from .headers import info_header
 
 logger = logging.getLogger(__name__)
 
@@ -53,34 +59,12 @@ def check_dirs(dirs):
                     empty.append(d)
                 else:
                     not_empty.append(d)
-    return(not_exist, not_dir, empty, not_empty)
-    
-    
-def get_survey_ids(dirs):
-    '''
-    Args:
-        dirs (list): List of paths to directories that contain a survey type.
-    
-    Returns:
-        sids (list): 
-            List of survey ID folders that are found in at least one of dirs.    
-        files (list):
-            Paths to raw files, which may be found in some older survey type folders.
-    '''
-    sids, files = [], []
-    for d in dirs:
-        temp = os.listdir(d)        
-        sids += [t for t in temp if os.path.isdir (os.path.join(d, t))]
-        raw   = [f for f in temp if os.path.isfile(os.path.join(d, f))]
-        files += [os.path.join(d, f) for f in raw]
-    sids =  sorted(list(set(sids)))
-    files.sort()
-    return(sids, files)
+    return(not_exist, not_dir, empty, not_empty)    
     
 
 def merge_contents(data_dirs, UTC_range = None):
     '''
-    Helper function for registry_datastream and registry_surveys.
+    Helper function for passive_registry and survey_regsitry.
     Discards paths to duplicate files and chooses larger files whenever possible.
     
     Args:    
@@ -124,180 +108,376 @@ def merge_contents(data_dirs, UTC_range = None):
     return(merge)
 
 
-# summarize to data frame
-
-#sensor_data = []
-#other_passive = []
-#surveys = []
-
-
-
-#def registry_passive(user_id, data_stream, raw_dirs, UTC_range = None):
-#    '''
-#    In some cases, downloaded Beiwe data may be located in multiple locations.
-#    These locations may contain duplicate filenames.
-#    This function collects all filepaths for a user's data stream data, drops duplicates, and chooses newer (larger) files whenever possible.
-#    
-#    Args:
-#        user_id (str):  Beiwe user id.
-#        data_stream (str):  The name of a Beiwe data stream.
-#            Should not be 'survey_answers', 'survey_timings', 'audio_recordings'.
-#        raw_dirs (list):  List of paths to raw data directories.
-#        UTC_range (list or Nonetype): Optional.  
-#            Ordered pair of date/times in filename_time_format, [start, end].
-#            If not None, ignore files before start and after end.
-#
-#    Returns:        
-#        first, last (str): Date/times of first and last files in merge.
-#        merge (list):  List of paths to files.
-#    '''
-#    if type(raw_dirs) is str: raw_dirs = [raw_dirs]
-#    data_dirs = [os.path.join(os.path.join(d, user_id), data_stream) for d in raw_dirs]
-#    data_dirs = [d for d in data_dirs if os.path.exists(d)]
-#    merge = merge_contents(data_dirs, UTC_range)
-#    if len(merge) > 0:
-#        first = os.path.basename(merge[0]).split('.')[0]
-#        last = os.path.basename(merge[-1]).split('.')[0]
-#    else:
-#        first = None
-#        last = None
-#    return(first, last, merge)
-#
-#
-#def registry_survey(user_id, survey_id, raw_dirs, UTC_range = None):
-#    '''
-#    In some cases, downloaded Beiwe data may be located in multiple locations.
-#    These locations may contain duplicate filenames.
-#    This function collects all filepaths for a user's survey data, drops duplicates, and chooses newer (larger) files whenever possible.
-#    
-#    Args:
-#        user_id (str):  Beiwe user id.
-#        survey_id (str):  Beiwe tracking survey id.
-#        raw_dirs (list):  List of paths to raw data directories.
-#        UTC_range (list or Nonetype): Optional.  
-#            Ordered pair of date/times in filename_time_format, [start, end].
-#            If not None, ignore files before start and after end.
-#
-#    Returns:        
-#        first, last (str): Date/times of first and last files in merge.
-#        merge (OrderedDict):  Keys are 'survey_answers', 'survey_timings'.
-#            Values are merged files for the corresponding data stream.
-#    '''
-#    if type(raw_dirs) is str: raw_dirs = [raw_dirs]
-#    merge = OrderedDict()
-#    first_dts = []
-#    last_dts = []
-#    for s in ['survey_answers', 'survey_timings']:               
-#        data_dirs = [os.path.join(os.path.join(os.path.join(d, user_id), s), survey_id) for d in raw_dirs]
-#        data_dirs = [d for d in data_dirs if os.path.exists(d)]
-#        merge[s] = merge_contents(data_dirs, UTC_range)
-#        if len(merge[s]) > 0:
-#            first_dts.append(os.path.basename(merge[s][0]).split('.')[0])
-#            last_dts.append(os.path.basename(merge[s][-1]).split('.')[0])
-#    if len(first_dts) > 0:
-#        first = min(first_dts)
-#        last = max(last_dts)
-#    else:
-#        first = None
-#        last = None
-#    return(first, last, merge)
-#
-#
-#def registry_audio(user_id, audio_id, raw_dirs, UTC_range = None):
-#    '''
-#    In some cases, downloaded Beiwe data may be located in multiple locations.
-#    These locations may contain duplicate filenames.
-#    This function collects all filepaths for a user's audio survey data, drops duplicates, and chooses newer (larger) files whenever possible.
-#    
-#    Args:
-#        user_id (str):  Beiwe user id.
-#        audio_id (str):  Beiwe audio survey id.
-#        raw_dirs (list):  List of paths to raw data directories.
-#        UTC_range (list or Nonetype): Optional.  
-#            Ordered pair of date/times in filename_time_format, [start, end].
-#            If not None, ignore files before start and after end.
-#
-#    Returns:        
-#        first, last (str): Date/times of first and last files in merge.
-#        merge (list):  List of paths to files.
-#    '''
-#    if type(raw_dirs) is str: raw_dirs = [raw_dirs]
-#    data_dirs = [os.path.join(os.path.join(os.path.join(d, user_id), 'audio_recordings'), audio_id) for d in raw_dirs]
-#    data_dirs = [d for d in data_dirs if os.path.exists(d)]
-#    merge = merge_contents(data_dirs, UTC_range)
-#    if len(merge) > 0:
-#        first = os.path.basename(merge[0]).split('.')[0]
-#        last = os.path.basename(merge[-1]).split('.')[0]
-#    else:
-#        first = None
-#        last = None
-#    return(first, last, merge)
-#
-#
-#def make_registry(user_id, raw_dirs, UTC_range = None):
-#    '''
-#    Merges all data streams for a user.
-#
-#    Args:
-#        user_id (str):  Beiwe user id.
-#        raw_dirs (list):  List of paths to raw data directories.
-#        UTC_range (list or Nonetype): Optional.  
-#            Ordered pair of date/times in filename_time_format, [start, end].
-#            If not None, ignore files before start and after end.
-#
-#    Returns:        
-#        merge (OrderedDict):  
-#            For keys 'first', 'last':  Values are date/time of first or last observations.
-#            For keys 'passive', 'tracking', 'audio': Values are corresponding merged file lists.
-#    '''
-#    if type(raw_dirs) is str: raw_dirs = [raw_dirs]
-#    # get all survey ids and names of data streams
-#    data_streams = []
-#    survey_ids = []
-#    audio_ids = []
-#    for d in raw_dirs:
-#        for top, dirs, filenames in os.walk(d):            
-#            if user_id in top:
-#                if 'audio' in top:                
-#                    audio_ids.append(os.path.basename(top))                
-#                elif 'survey' in top:
-#                    survey_ids.append(os.path.basename(top))
-#                else:
-#                    data_streams.append(os.path.basename(top))
-#    data_streams = list(set([i for i in data_streams if user_id not in i]))
-#    survey_ids = list(set([i for i in survey_ids if 'survey' not in i]))    
-#    audio_ids = list(set([i for i in audio_ids if 'audio' not in i]))    
-#    # merge everything
-#    first_dts = []
-#    last_dts = []
-#    merge_p = OrderedDict()
-#    merge_s = OrderedDict()
-#    merge_a = OrderedDict()
-#    for s in data_streams:
-#        f, l, m = registry_passive(user_id, s, raw_dirs, UTC_range)
-#        first_dts.append(f)
-#        last_dts.append(l)
-#        merge_p[s] = m
-#    for s in survey_ids:
-#        f, l, m = registry_survey(user_id, s, raw_dirs, UTC_range)        
-#        first_dts.append(f)
-#        last_dts.append(l)        
-#        merge_s[s] = m
-#    for s in audio_ids:
-#        f, l, m = registry_audio(user_id, s, raw_dirs, UTC_range)            
-#        first_dts.append(f)
-#        last_dts.append(l)                
-#        merge_a[s] = m
-#    first_dts = [i for i in first_dts if not i is None]
-#    last_dts = [i for i in last_dts if not i is None]
-#    if len(first_dts) > 0:
-#        first = min(first_dts)
-#        last = max(last_dts)
-#    else:
-#        first = None
-#        last = None
-#    merge = OrderedDict(zip(['first', 'last', 'passive', 'tracking', 'audio'], 
-#                            [first, last, merge_p, merge_s, merge_a]))
-#    return(merge)
+def get_survey_ids(dirs):
+    '''
+    Args:
+        dirs (list): List of paths to directories that contain a survey type.
+    
+    Returns:
+        sids (list): 
+            List of survey ID folders that are found in at least one of dirs.    
+        files (list):
+            Paths to raw files, which may be found in some older survey type folders.
+    '''
+    sids, files = [], []
+    for d in dirs:
+        try: temp = os.listdir(d)        
+        except: temp = []
+        sids += [t for t in temp if os.path.isdir (os.path.join(d, t))]
+        raw   = [f for f in temp if os.path.isfile(os.path.join(d, f))]
+        files += [os.path.join(d, f) for f in raw]
+    sids =  sorted(list(set(sids)))
+    files.sort()
+    return(sids, files)
 
 
+def size_on_disk(filepaths, ndigits = 1):
+    '''
+    Given a list of filepaths, return total size on disk in megabytes.
+    
+    Args: 
+        filepaths (list): List of paths to files.        
+        ndigits (int or Nonetype):
+            If not None, number of digits for rounding.
+    Returns:
+        b (int): Total size of all files, in bytes. 
+    '''
+    b = 0
+    if isinstance(filepaths, str): filepaths = [filepaths]
+    for p in filepaths:
+        b += os.path.getsize(p)
+    return(b)
+
+
+def identifiers_registry(user_id, raw_dirs, UTC_range = None):
+    '''
+    Get registry of identifiers for one user.
+       
+    Args:
+        user_id (str): Beiwe user ID.
+        raw_dirs (list): 
+        raw_dirs (str or list):  
+            Paths to directories that may contain raw data from this user.
+        UTC_range (list or Nonetype):  
+            Ordered pair of date/times in filename_time_format, [start, end].
+            If not None, ignore files before start and after end.
+
+    Returns:    
+        registry (OrderedDict): Keys and values are:
+            'flag':  Values are either:
+                'not found' - Identifiers folder is missing or empty.
+                None - Identifiers folder exists and is not empty.
+            'count': Number of identifiers files (int).
+            'bytes':    Total size of files on disk in bytes.                
+            'files': List of all available identiers files.
+    '''
+    registry = OrderedDict({'files': [], 'flag': None, 'count': 0, 'bytes': 0})
+    to_check = [os.path.join(d, user_id, 'identifiers') for d in raw_dirs]
+    not_exist, not_dir, empty, not_empty = check_dirs(to_check)        
+    if len(not_empty) == 0: 
+        registry['flag'] = 'not found'
+        logger.warning('No identifiers found for %s.' % user_id)        
+    else: 
+        merge = merge_contents(not_empty, UTC_range)
+        if len(merge) == 0:                
+            logger.warning('No identifiers found for %s in this range.' % user_id)        
+            merge = [merge_contents(not_empty, ['1970-01-01 00_00_00', UTC_range[1]])[-1]]
+            if len(merge) > 0:
+                logger.warning('Using last observed identifiers file for %s.' % user_id)
+            else:
+                registry['flag'] = 'not found'
+                logger.warning('No identifiers found for %s.' % user_id)        
+    registry['files'] = merge
+    registry['count'] = len(merge)
+    registry['bytes'] = size_on_disk(merge)
+    return(registry)
+    
+    
+def passive_registry(user_id, phone_os, raw_dirs, UTC_range = None):
+    '''
+    Get registry of raw passive data for one user.
+       
+    Args:
+        user_id (str): Beiwe user ID.
+        os (str): 'iOS' or 'Android' or 'both'.
+        raw_dirs (list): 
+        raw_dirs (str or list):  
+            Paths to directories that may contain raw data from this user.
+        UTC_range (list or Nonetype):  
+            Ordered pair of date/times in filename_time_format, [start, end].
+            If not None, ignore files before start and after end.
+
+    Returns:    
+        passive_range (list): 
+            Datetimes corresponding to first and last passive data files.
+        registry (OrderedDict):  Keys are passive data streams.
+            Each value is an ordered dictionary with keys and values:
+                'flag':  Values may be:
+                    'not available for OS' - Data stream doesn't exist for this device type.
+                    'not found' - Data stream directory is missing or empty.
+                    None - Data stream exists for the device and is not empty.
+                'count': Number of files for this data stream (int).
+                'bytes':    Total size of files on disk in bytes.                
+                'files': List of all available files for the data stream.
+    '''
+    passive_range = []
+    registry = OrderedDict.fromkeys(passive_available['both'])
+    for stream in passive_available['both']:
+        temp = OrderedDict({'flag': None, 'count': 0, 'bytes': 0, 'files': []})
+        if not stream in passive_available[phone_os]:
+            temp['flag'] = 'not available for OS'
+        else:
+            to_check = [os.path.join(d, user_id, stream) for d in raw_dirs]
+            not_exist, not_dir, empty, not_empty = check_dirs(to_check)          
+            if len(not_empty) == 0: temp['flag'] = 'not found'
+            else: 
+                merge = merge_contents(not_empty, UTC_range)
+                passive_range += [os.path.basename(merge[0]).split('.')[0], 
+                                  os.path.basename(merge[-1]).split('.')[0]]
+                temp['files'] = merge
+                temp['count'] = len(merge)
+                temp['bytes'] = size_on_disk(merge)
+        registry[stream] = temp
+    passive_range.sort()
+    if len(passive_range) > 1:
+        passive_range = [passive_range[0], passive_range[-1]]
+    return(passive_range, registry)
+
+
+def survey_registry(user_id, raw_dirs, UTC_range = None):
+    '''
+    Get registry of survey data for one user.
+       
+    Args:
+        user_id (str): Beiwe user ID.
+        raw_dirs (list): 
+        raw_dirs (str or list):  
+            Paths to directories that may contain raw data from this user.
+        UTC_range (list or Nonetype):  
+            Ordered pair of date/times in filename_time_format, [start, end].
+            If not None, ignore files before start and after end.
+
+    Returns:
+        survey_range (list): 
+            Datetimes corresponding to first and last survey data files.
+        registry(OrderedDict):  
+            Keys are names of survey directories (e.g. 'audio_recordings', 'survey_timings').
+            Each value is an ordered dictionary with keys and values:
+                'flag':  None or 'not found'.
+                'ids': 
+                    An ordered dictionary. Keys are survey identifiers.  
+                    Each value is an ordered dictionary with keys and values:
+                        'count': Number of files for this data stream (int).
+                        'bytes':    Total size of files on disk in bytes.                
+                        'files': List of all available files for the corresponding survey.
+        not_registered (list): 
+            Paths to unregistered files in irregular directories.
+            Irregular directories are survey directories that contain raw data files.
+    '''
+    survey_range = []
+    not_registered = []
+    registry = OrderedDict.fromkeys(survey_data)
+    for survey_type in survey_data:
+        registry[survey_type] = OrderedDict({'flag': None, 'ids': OrderedDict()})
+        survey_dirs = [os.path.join(d, user_id, survey_type) for d in raw_dirs]
+        sids, files = get_survey_ids(survey_dirs)
+        not_registered += files
+        if len(sids) == 0:
+            registry[survey_type]['flag'] = 'not found'
+        else:
+            for s in sids:
+                temp = OrderedDict({'count': 0, 'bytes': 0, 'files': []})
+                to_check = [os.path.join(d, s) for d in survey_dirs]                        
+                not_exist, not_dir, empty, not_empty = check_dirs(to_check)          
+                if len(not_empty) > 0: 
+                    merge = merge_contents(not_empty, UTC_range)        
+                    survey_range += [os.path.basename(merge[0]).split('.')[0], 
+                                     os.path.basename(merge[-1]).split('.')[0]]
+                    temp['files'] = merge
+                    temp['count'] = len(merge)
+                    temp['bytes'] = size_on_disk(merge)
+                registry[survey_type]['ids'][s] = temp
+    if len(survey_range) > 1:
+        survey_range.sort()
+        survey_range = [survey_range[0], survey_range[-1]]
+    return(survey_range, registry, not_registered)
+
+
+def registry_to_text(passive, surveys, first, last, names):
+    '''
+    Generate a text summary of a passive data and survey registries.
+    '''    
+    # passive
+    r, hours, u = summarize_UTC_range([first, last], unit = 'hours', ndigits = None)
+    streams = [s for s in passive if passive[s]['flag'] is None]
+    p = pd.DataFrame(columns = ['  Files', '  Coverage', '    Storage'])
+    for s in streams:
+        if s in ['identifiers', 'calls', 'texts', 'proximity']:
+            p.loc[s.ljust(15)] = [passive[s]['count'], 
+                        None,
+                        naturalsize(passive[s]['bytes'])]        
+        else:
+            p.loc[s.ljust(15)] = [passive[s]['count'], 
+                        round(passive[s]['count']/hours, 2),
+                        naturalsize(passive[s]['bytes'])]
+    if len(p) > 0:
+        p_text = '\n' + p.to_string(na_rep = '-')
+    else: p_text = None
+    # surveys
+    s_types = [t for t in surveys if surveys[t]['flag'] is None]
+    s_text = []
+    for st in s_types:
+        temp = surveys[st]['ids']
+        s = pd.DataFrame(columns = ['  Files', '    Storage'])
+        for sid in temp:
+            try: name = names[sid]
+            except: name = sid
+            if len(name) > 25: index = name[0:22] + '...'
+            else: index = name.ljust(25)
+            s.loc[index] = [temp[sid]['count'], naturalsize(temp[sid]['bytes'])]
+        s.sort_index(inplace = True)
+        s_text.append(s.to_string(na_rep = '-'))
+    return(p_text, ['\n' + st for st in s_types], s_text)
+
+def data_to_text(passive, surveys, data, object_names):
+    '''
+    Get a text summary of data streams for multiple users.
+    '''    
+    # passive streams
+    p = pd.DataFrame(columns = ['  Files', '    Storage'])
+    for s in passive:
+        count, size = 0, 0
+        for d in data.values():
+            if s in d.passive:
+                count += d.passive[s]['count']
+                size += d.passive[s]['bytes']
+        p.loc[s.ljust(15)] = [count, naturalsize(size)]        
+    if len(p) > 0:
+        p_text = '\n' + p.to_string(na_rep = '-')
+    else: p_text = None
+    # survey data
+    # surveys
+    s_text = []
+    for st in surveys:
+        temp = surveys[st]
+        s = pd.DataFrame(columns = ['  Files', '    Storage'])
+        for sid in temp:
+            try: name = object_names[sid]
+            except: name = sid
+            if len(name) > 25: index = name[0:22] + '...'
+            else: index = name.ljust(25)
+            count, size = 0, 0
+            for d in data.values():
+                if sid in d.surveys[st]['ids']:
+                    count += d.surveys[st]['ids'][sid]['count']
+                    size += d.surveys[st]['ids'][sid]['bytes']
+            s.loc[index] = [count, naturalsize(size)]
+        s.sort_index(inplace = True)
+        s_text.append(s.to_string(na_rep = '-'))
+    return(p_text, ['\n' + st for st in list(surveys.keys())], s_text)
+
+
+def coerce_to_dict(to_coerce, keys):
+    '''
+    Convert str, list, or dict to a dictionary with the desired keys.
+    Returns a dictionary with desired keys. Values are:
+        []:          if to_coerce is None or a dictionary without that key.
+        [to_coerce]: if to_coerce is a string.
+        to_coerce:   if to_coerce is a list.
+    '''
+    if isinstance(to_coerce, (dict, OrderedDict)):
+        temp = OrderedDict.fromkeys(keys)
+        temp.update(to_coerce)
+    else:
+        temp = OrderedDict(zip(keys, [to_coerce]*len(keys)))
+    for k in temp:
+        if temp[k] is None: temp[k] = []
+        elif isinstance(temp[k], str): temp[k] = [temp[k]]
+    return(temp)
+
+def export_manage(d, directory):
+    '''
+    Handle exports for beiwetools.manage.classes.
+    '''
+    # if isinstance(d, DeviceInfo):
+    if str(type(d)) == "<class 'beiwetools.manage.classes.DeviceInfo'>": 
+        try:
+            temp = list(d.identifiers.values())[-1]
+            filename = temp['patient_id'] + '_identifiers'
+            header = ['from_file'] + list(temp.keys())
+            path = setup_csv(filename, directory, header)
+            for f in d.identifiers.keys():  
+                line = [f] + list(d.identifiers[f].values())
+                write_to_csv(path, line)
+        except:
+            logger.warning('Unable to export identifiers.')
+    # elif isinstance(d, UserData):
+    elif str(type(d)) == "<class 'beiwetools.manage.classes.UserData'>": 
+        out = OrderedDict([('id',        d.id),
+                           ('passive',   d.passive),
+                           ('surveys',   d.surveys),
+                           ('first',     d.first),
+                           ('last',      d.last),
+                           ('UTC_range', d.UTC_range),
+                           ('not_registered', d.not_registered)])
+        write_json(out, d.id + '_registry', directory)    
+    # elif isinstance(d, BeiweProject):
+    elif str(type(d)) == "<class 'beiwetools.manage.classes.BeiweProject'>": 
+        folder_names = ['identifiers', 'user_summaries', 'records']
+        dirs = [os.path.join(directory, f) for f in folder_names]
+        dirs.append(os.path.join(directory, 'records', 'registries'))
+        setup_directories(dirs)        
+        idp, usp, recp, regp = dirs
+        csvp = setup_csv('overview', directory, info_header + ['study_name', 'configuration'])
+        for i in d.ids:
+            ud = d.data[i]
+            ud.export(regp)
+            ud.device.export(idp)
+            ud.summary.to_file(i + '_summary', usp)
+            try: extra_info = [d.lookup['study_name'][i], len(d.lookup['configuration'][i])]
+            except: extra_info = [None, None]
+            write_to_csv(csvp, list(ud.info.values()) + extra_info)
+        out = OrderedDict([('ids', d.ids),
+                           ('raw_dirs', d.raw_dirs),
+                           ('first', d.first),
+                           ('last', d.last),
+                           ('passive', d.passive),
+                           ('surveys', d.surveys),
+                           ('lists', d.lists),
+                           ('lookup', d.lookup),
+                           ('flags', d.flags)])
+        write_json(out, 'export', recp)
+        d.summary.to_file('summary', directory)
+    else:        
+        logger.warning('This function doesn\'t handle export of %s.' % str(type(d)))
+
+
+def load_manage(d, path):        
+    '''
+    Handle loading for beiwetools.manage.classes.
+    '''
+    # if isinstance(d, UserData):    
+    if str(type(d)) == "<class 'beiwetools.manage.classes.UserData'>": 
+        temp = read_json(path)
+        d.id        = temp['id']
+        d.passive   = temp['passive']
+        d.surveys   = temp['surveys']
+        d.first     = temp['first']
+        d.last      = temp['last']  
+        d.UTC_range = temp['UTC_range']
+        d.not_registered = temp['not_registered']
+    # elif isinstance(d, BeiweProject):        
+    elif str(type(d)) == "<class 'beiwetools.manage.classes.BeiweProject'>": 
+        export = os.path.join(path, 'records', 'export.json')
+        temp = read_json(export)
+        d.ids = temp['ids']
+        d.raw_dirs = temp['raw_dirs']
+        d.first = temp['first']
+        d.last = temp['last']
+        d.passive = temp['passive']
+        d.surveys = temp['surveys']
+        d.lists = temp['lists']
+        d.lookup = temp['lookup']
+        d.flags = temp['flags']
+    else:
+        logger.warning('This function doesn\'t handle loading for %s.' % str(type(d)))

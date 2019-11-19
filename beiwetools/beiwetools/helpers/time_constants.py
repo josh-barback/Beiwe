@@ -2,6 +2,7 @@
 Constants for working with Beiwe time formats.
 '''
 from pytz import timezone
+from collections import OrderedDict
 
 # seconds
 min_s  = 60
@@ -15,6 +16,8 @@ day_ms  = 1000*day_s
 week_ms =    7*day_ms
 month_ms =  30*day_ms
 year_ms =  365*day_ms
+time_unit_ms = OrderedDict(zip(['minutes', 'hours', 'days', 'weeks', 'months', 'years'],
+                               [min_ms, hour_ms, day_ms, week_ms, month_ms, year_ms]))
 
 # Beiwe day order
 day_order = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']

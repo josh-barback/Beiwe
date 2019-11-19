@@ -12,7 +12,7 @@ This document gives a brief description of each sub-package, along with some bac
 
 There are four sub-packages:
 
-* `helpers`:  Functions for handling common scenarios, such as converting time formats, organizing Beiwe data files, and plotting timestamps,
+* `helpers`:  Functions for handling common scenarios, such as converting time formats, summarizing sensor sampling rates, and plotting timestamps,
 * `configread`:  Tools for querying Beiwe configuration files and generating study documentation,
 * `manage`:  Tools for organizing and summarizing directories of raw Beiwe data,
 * `localize`:  Classes and functions for incorporating each user's time zone into the analysis of processed Beiwe data.
@@ -54,6 +54,7 @@ This is version 0.0.1 of `beiwetools`.  This package was developed with Python 3
 Among the package requirements, the following are not in the Python Standard Library:
 
 * `holidays`
+* `humanize`
 * `pandas`
 * `pytz`
 * `seaborn`
@@ -137,16 +138,25 @@ Several time formats are used in Beiwe data and configuration files.  With few e
 #### 3.1 Timestamps
 In raw Beiwe data, each observation is associated with a timestamp corresponding to the number of milliseconds that have elapsed since the Unix epoch, January 1, 1970 00:00:00 Coordinated Universal Time (UTC).
 
-#### 3.2 Raw Data <a name="files"/>
-A raw Beiwe data set contains `csv` files organized according to the directory structure described [below](#directory).  Each file corresponds to one hour of observations.  If no file exists for a particular hour, then no data were observed from that stream during this time.
+
+#### 3.2 File Names
+A raw Beiwe data set contains `csv` files organized according to the directory structure described [below](#directory).  Most files correspond to one hour of observations.  If no file exists for a particular hour, then no data were observed from that stream during that hour.
 
 The name of each file is the UTC time corresponding to the beginning of the hour in which data were collected.  The filename format is: 
-`<%Y-%m-%d %H_%M_%S>.csv`
+`<%Y-%m-%d %H_00_00>.csv`
 
+Exceptions are found in these directories:
+
+* `survey_answers`: Responses to tracking surveys are named with the time of submission.  The filename format is:  
+`<%Y-%m-%d %H_%M_%S>.csv`
+* `audio_recordings`: Responses to audio surveys are also named with the time of submission.  Extensions correspond to audio formats, such as `mp4` or `wav`.
+
+
+#### 3.3 Raw Data <a name="files"/>
 Most raw data files have columns labeled `timestamp` and `UTC time`.  These contain the millisecond timestamp and human-readable UTC time (`%Y-%m-%dT%H:%M:%S.%f`) for the observations in the corresponding row.
 
 
-#### 3.3 Configuration Files
+#### 3.4 Configuration Files
 Each survey in a Beiwe study has a `timings` attribute that indicates which days and times the survey is delivered.  This attribute is a list of seven lists of integers.  For example:
 
 ```
@@ -243,9 +253,7 @@ These modules provide general-purpose tools for tasks that often arise when work
 Some color maps and functions for generating Color Brewer palettes.
 
 #### `decorators`
-
-
-
+Some decorators to use when defining functions that may be used with `helpers.proc_template`.
 
 #### `plot`
 Functions for handling basic data visualization tasks, such as plotting timestamps and generating axis labels for longitudinal data.
@@ -348,11 +356,11 @@ For convenience, it may be desirable to assign a descriptive name to each study 
 In Beiwe questionnaires (called "tracking surveys"), responses to checkbox and radio button items are assigned a numeric score.  This score is the zero-based index of the response in the corresponding list of answers.  For example, if possible answers are `['High', 'Medium', 'Low']` then the corresponding scores are 0, 1, 2.
 
 #### 6.6 Limitations & Cautions
-This sub-package does not parse branching logic settings used for conditional delivery of tracking survey items.  A question's logic configuration, if any, is stored in the `logic` attribute of the corresponding  `TrackingQuestion` instance.
+1. This sub-package does not parse branching logic settings used for conditional delivery of tracking survey items.  A question's logic configuration, if any, is stored in the `logic` attribute of the corresponding  `TrackingQuestion` instance.
 
-Note that only tracking surveys and audio surveys are represented by dedicated classes (`TrackingSurvey`, `AudioSurvey`).  Other survey types (e.g. image surveys) are represented with the generic `BeiweSurvey` class.  [Here](#newsurvey) are guidelines for implementing additional survey types.
+2. Note that only tracking surveys and audio surveys are represented by dedicated classes (`TrackingSurvey`, `AudioSurvey`).  Other survey types (e.g. image surveys) are represented with the generic `BeiweSurvey` class.  [Here](#newsurvey) are guidelines for implementing additional survey types.
 
-Lastly, note that comparison of `configread` objects is intended to be somewhat flexible.  This is to accommodate the possibility that the same study configuration may be duplicated or serialized in different formats.  Therefore, some caution should be used when checking equality.
+3. Lastly, note that comparison of `configread` objects is intended to be somewhat flexible.  This is to accommodate the possibility that the same study configuration may be duplicated or serialized in different formats.  Therefore, some caution should be used when checking equality.
 
 
 ___
@@ -361,24 +369,25 @@ ___
 This sub-package provides classes and functions for managing raw Beiwe data.  These tools are intended for use when processing data locally, e.g. on a PC with data that have been downloaded from the Beiwe backend.
 
 #### 7.1 Device attributes
-The `DeviceInfo` class manages information found in each user's `identifiers` directory.  
-
-A new set of identifiers is created whenever the Beiwe app is installed or re-installed.  These files provide a partial record of changes to each user's device, including phone model, operating system, and Beiwe version.
+A new set of "identifiers" is created whenever the Beiwe app is installed or re-installed.  These files provide a partial record of changes to each user's device, including phone model, operating system, and Beiwe app version.  Information in these files is managed by instances of the `DeviceInfo` class.
 
 #### 7.2 Raw data registries 
-The `ProjectData` class is intended to assist with implementation and reproducibility of Beiwe data analysis.  The main purpose of this class is to organize a registry of available raw data files for a set of Beiwe users over a fixed follow-up period.  These records can then be exported and reloaded for use in the future.  
+The `BeiweProject` class is intended to assist with implementation and reproducibility of Beiwe data analysis.  The main purpose of this class is to create a registry of available raw data files for a set of Beiwe users over a fixed follow-up period.  These records can then be exported and reloaded for use in the future.
 
-The `ProjectData` class can handle management of a single raw data directory, as well as merging of multiple raw data directories.  The latter may be useful under some circumstances:
+The `BeiweProject` class can handle management of a single raw data directory, as well as merging of multiple raw data directories.  The latter may be useful under some circumstances:
 
 * Raw data from the same study may have been downloaded to multiple locations corresponding to different subsets of users or to different time ranges.  It may be desirable to create a single project that pools all users and time ranges.
 
 * Research participants may be organized into multiple arms, with smartphone data collection in each arm implemented with a different Beiwe study.  (This strategy might be used when different arms receive different surveys.)  In this case, it may be desirable to pool all users for analysis of common data streams and for preservation of blinding.
 
 #### 7.3 Cautions
+1. In the past, some raw audio data may have been delivered directly to this folder:  
+`<raw data directory>/<Beiwe User ID>/audio_recordings`  
+Since these audio files are not attatched to a particular audio survey identifier, they will not be registered by `BeiweProject` objects.
 
-raw audio data prior to Summer 2017
+2. Certain raw data from Android and iPhone devices are formatted differently, so researchers should use caution if data are collected for the same user ID with phones of different types.  In this unusual situation, the user's data should be carefully divided according to phone type and analyzed separately.  Such users are identified with various flags and warnings by `BeiweProject` and `UserData` objects. 
 
-Certain raw data from Android and iPhone devices are formatted differently, so researchers should use caution if data are collected for the same user ID with phones of different types.  In this unusual situation, the user's data should be carefully divided according to phone type and analyzed separately.
+3. Researchers can use a `BeiweProject` instance to associate configuration files with a Beiwe user's raw data.  This is mainly for the purpose of scoring tracking survey questions.  Before attaching multiple configuration files to a project, object name assignments should be manually updated to avoid confusion. Otherwise, it's likely that the same name (e.g. `Survey_01`) will be assigned to several distinct objects.
 
 
 ___
@@ -401,7 +410,7 @@ ___
 
 Public Beiwe data sets can be downloaded here:
 
-`https://zenodo.org/record/1188879#.XcEV2HWYW03`
+[`https://zenodo.org/record/1188879#.XcDUyHWYW02`](https://zenodo.org/record/1188879#.XcDUyHWYW02)
 
 The example data were collected from five different Beiwe studies.  The corresponding configuration files are located in:
 
@@ -460,7 +469,7 @@ For examples, see:
 To implement a new survey type:
 
 1. Add an entry for the new survey type here:  
-`configread/survey_settings.json`  
+`beiwetools/configread/survey_settings.json`  
 The key is the survey type and the value is a list of specific attributes for the survey type.  Don't include attributes that are already listed under the key `common_survey_info`.
 2. Define a class for the new survey that inherits from this class:  
 `configread.surveys.BeiweSurvey`  
@@ -473,16 +482,14 @@ If necessary, re-define the following methods:
 3. Add the class to this dictionary:   
 `configread.surveys.survey_classes`
 
-4. Identify the output folder(s) for raw data from the new survey type and update `beiwetools.manage.
-
-
-functions.survey_data'.
+4. Identify the output folder(s) for raw data from the new survey type and update this file:  
+`/manage/data_streams.json`
 
 5. Verify that `beiwetools.manage.BeiweProject` correctly handles registries of raw data from the new survey type.  This should not be a problem if the new survey delivers data to the expected location:  
 `<raw data directory>/<Beiwe User ID>/<survey type>/<survey identifier>/`
 
 #### 10.4 New passive data stream
+Add new passive data streams here:  
+`/manage/data_streams.json`
 
-update `beiwetools.manage.
-
-functions.passive_data'.
+The new entry should indicate whether the data stream is specific to iPhones or Android phones.

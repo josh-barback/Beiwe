@@ -1,5 +1,5 @@
-'''
-Miscellaneous functions for working with Beiwe data and study configurations.
+'''Miscellaneous functions for working with Beiwe data and study configurations.
+
 '''
 import os
 import json
@@ -233,28 +233,3 @@ def check_same(x, y, to_check = 'all'):
     if len(results) > 0:
         same = all(results)
     return(same)
-
-
-#def flatten_nested_dictionaries(dictionary, sep = '_'):
-#    '''
-#    "Flattens" one level of a dictionary of dictionaries by appending keys.
-#    
-#    Args:
-#        dictionary (OrderedDict):  
-#            An ordered dictionary whose values are ordered dictionaries.
-#
-#    Returns:
-#        flattened (OrderedDict)
-#
-#    Example:
-#        >>> a = OrderedDict([('1', 'x')])        
-#        >>> b = OrderedDict([('2', 'y')])
-#        >>> c = OrderedDict([('a', a), ('b', b)])        
-#        >>> flatten_nested_dictionaries(c)
-#        OrderedDict([('a_1', 'x'), ('b_2', 'y')])
-#    '''
-#    flattened = OrderedDict()    
-#    for k in dictionary.keys():
-#        for kk in dictionary[k]:
-#            flattened[k + sep + kk] = dictionary[k][kk]
-#    return(flattened)
