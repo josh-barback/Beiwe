@@ -371,23 +371,42 @@ This sub-package provides classes and functions for managing raw Beiwe data.  Th
 #### 7.1 Device attributes
 A new set of "identifiers" is created whenever the Beiwe app is installed or re-installed.  These files provide a partial record of changes to each user's device, including phone model, operating system, and Beiwe app version.  Information in these files is managed by instances of the `DeviceInfo` class.
 
-#### 7.2 Raw data registries 
+#### 7.2 Raw data registries
+The `UserData` class is a tool for managing an individual user's raw Beiwe data.  This includes maintaining a registry of locations for files from each survey and data stream.
+
+#### 7.3 Using the `BeiweProject` class
 The `BeiweProject` class is intended to assist with implementation and reproducibility of Beiwe data analysis.  The main purpose of this class is to create a registry of available raw data files for a set of Beiwe users over a fixed follow-up period.  These records can then be exported and reloaded for use in the future.
 
-The `BeiweProject` class can handle management of a single raw data directory, as well as merging of multiple raw data directories.  The latter may be useful under some circumstances:
+A `BeiweProject` instance includes:
+
+* `DeviceInfo` and `UserData` instances for each user,
+
+* Optionally, one or more `BeiweConfig` instances for each user.
+
+A `BeiweProject` instance can handle management of a single raw data directory, as well as merging of multiple raw data directories.  The latter may be useful under some circumstances:
 
 * Raw data from the same study may have been downloaded to multiple locations corresponding to different subsets of users or to different time ranges.  It may be desirable to create a single project that pools all users and time ranges.
 
 * Research participants may be organized into multiple arms, with smartphone data collection in each arm implemented with a different Beiwe study.  (This strategy might be used when different arms receive different surveys.)  In this case, it may be desirable to pool all users for analysis of common data streams and for preservation of blinding.
 
-#### 7.3 Cautions
+See the notebook `examples/manage_example.ipynb` for sample code for the following tasks:
+
+* 
+
+*
+
+*
+
+*
+
+#### 7.5 Cautions
 1. In the past, some raw audio data may have been delivered directly to this folder:  
 `<raw data directory>/<Beiwe User ID>/audio_recordings`  
-Since these audio files are not attatched to a particular audio survey identifier, they will not be registered by `BeiweProject` objects.
+Since these audio files are not attached to a particular audio survey identifier, they will not be registered by `BeiweProject` objects.
 
 2. Certain raw data from Android and iPhone devices are formatted differently, so researchers should use caution if data are collected for the same user ID with phones of different types.  In this unusual situation, the user's data should be carefully divided according to phone type and analyzed separately.  Such users are identified with various flags and warnings by `BeiweProject` and `UserData` objects. 
 
-3. Researchers can use a `BeiweProject` instance to associate configuration files with a Beiwe user's raw data.  This is mainly for the purpose of scoring tracking survey questions.  Before attaching multiple configuration files to a project, object name assignments should be manually updated to avoid confusion. Otherwise, it's likely that the same name (e.g. `Survey_01`) will be assigned to several distinct objects.
+3. Researchers can use a `BeiweProject` instance to associate configuration files with a Beiwe user's raw data.  Before attaching multiple configuration files to a project, object name assignments should be manually updated to avoid confusion. Otherwise, it's likely that the same name (e.g. `Survey_01`) will be assigned to more than one object.
 
 
 ___
@@ -420,10 +439,9 @@ The following code samples (iPython notebooks) are also located in the `examples
 
 * `configread_example.ipynb`
 * `manage_example.ipynb`
-* `passive_summary_example.ipynb`
+* `gpsrep_summary_example.ipynb`
+* `accrep_summary_example.ipynb`
 * `survrep_example.ipynb`
-* `gpsrep_example.ipynb`
-* `accrep_example.ipynb`
 * `localize_example.ipynb` 
 
 ___

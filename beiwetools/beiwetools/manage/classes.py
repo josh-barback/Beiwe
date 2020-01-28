@@ -10,7 +10,7 @@ from collections import OrderedDict
 
 from beiwetools.helpers.time import summarize_UTC_range, local_now
 from beiwetools.helpers.classes import Summary
-from beiwetools.helpers.functions import check_same, sort_by, join_lists, read_json
+from beiwetools.helpers.functions import check_same, sort_by, join_lists, coerce_to_dict
 from beiwetools.configread.classes import BeiweConfig
 
 from .headers import identifiers_header, info_header
@@ -28,6 +28,9 @@ class BeiweProject():
         ids (list):  List of all available user IDs, sorted by first observation.
         raw_dirs (list): Paths to directories where raw data are found.
         data (OrderedDict):  Keys are Beiwe user ids, values are UserData objects.
+        configurations (OrderedDict): 
+            Keys are paths to configuration files.
+            Values are corresponding BeiweConfig objects.
         first, last (str):  
             Date/time of first and last observations across all users.
             Formatted as '%Y-%m-%d %H_%M_%S'.
@@ -47,7 +50,9 @@ class BeiweProject():
             May be saved to JSON format, therefore should only contain primitive types. 
             Values should be dictionaries in which keys are user IDs or object identifiers.
             Created with user lookups: 'study_name', 'default_name', 'os', 'configuration', 'UTC_range'
-            Also created with an object lookup: 'object_name'.
+            If configuration files with unique names are attached:
+                Also created with an object name lookup: 'object_name',
+                And a reverse object name lookup: 'reverse_object_name'.
             Note:
                 'study_name' and 'object_name' are assembled from configuration name assignments.
                 If there are conflicts, later configuration paths take precedence.
@@ -107,9 +112,12 @@ class BeiweProject():
         # set up lists
         self.lists = OrderedDict(zip(['iOS', 'Android'], [[], []]))
         # configuration and UTC range dictionaries
+        if configuration is None: configuration = []
+        if UTC_range is None: UTC_range = []
         self.lookup = OrderedDict(zip(['configuration', 'UTC_range'], 
                                       [coerce_to_dict(configuration, user_ids), 
                                        coerce_to_dict(UTC_range, user_ids)]))                
+        self.load_configurations()
         # user name dictionary
         self.lookup['default_name'] = OrderedDict(user_names)
         # get object names from configuration files
@@ -187,22 +195,35 @@ class BeiweProject():
             for j in range(n_ids):
                 i = self.ids[j]
                 count = str(j+1).zfill(n_digits)
-                self.lookup['default_name'][i] = 'Participant ' + count
+                temp[i] = 'Participant ' + count            
             self.update_names(user_names = temp, object_names = None)
         else:
             self.summarize()
         logging.info('Finished generating study records for %d of %d users.' % (len(self.data), len(user_ids)))
         return(self)
 
-    def update_configuration(self, configuration):
+    def update_configurations(self, configurations):
         '''
         Set new configuration files for project.
         Overwrites old configuration files.
         '''
-        self.lookup['configuration'] = coerce_to_dict(configuration, self.ids)
+        self.lookup['configuration'] = coerce_to_dict(configurations, self.ids)
+        self.load_configurations()
         self.get_names()
         self.update_names()
-        logger.info('Updated project configuration files.')
+    
+    def load_configurations(self):
+        '''
+        Create a BeiweConfig object for each configuration file path.
+        '''
+        temp = OrderedDict()
+        for k in self.lookup['configuration']:
+            for p in self.lookup['configuration'][k]:
+                if not p in temp:
+                    try: temp[p] = BeiweConfig(p) 
+                    except: logger.warning('Unable to read configuration file: %s' % os.path.basename(p))
+        self.configurations = temp
+        logger.info('Loaded configuration files.')
         
     def get_names(self, user_ids = None):
         '''
@@ -214,7 +235,7 @@ class BeiweProject():
         for i in self.lookup['configuration']:
             config_paths = self.lookup['configuration'][i]
             for p in config_paths:
-                try: temp[i] = BeiweConfig(p).name
+                try: temp[i] = self.configurations[p].name
                 except: temp[i] = None 
         self.lookup['study_name'] = temp
         if len(temp) > 0:
@@ -223,22 +244,15 @@ class BeiweProject():
         all_configs = join_lists([self.lookup['configuration'][i] for i in user_ids])
         all_configs = list(OrderedDict.fromkeys(all_configs)) # drop duplicates but keep order
         temp = OrderedDict()
-        for p in all_configs: temp.update(BeiweConfig(p).name_assignments)
+        for c in all_configs: temp.update(self.configurations[c].name_assignments)
         if len(temp) != len(set(temp.values())):
-            logger.warning('Study object names are not unique.  Attempting to prefix object names with study names.')
-            temp = OrderedDict()
-            for p in all_configs: 
-                c = BeiweConfig(p)
-                for k in c.name_assignments:
-                    if c.name == c.name_assignments[k]: # if k is the study id, don't add prefix
-                        temp[k] = c.name
-                    else: temp[k] = c.name + ' - ' + c.name_assignments[k]
-            if len(temp) != len(set(temp.values())):
-                logger.warning('Object names are still not unique. Object names will be ignored.')
-                temp = OrderedDict()                
-        self.lookup['object_name'] = temp
-        if len(temp) > 0:
-            logger.info('Finished reading object names.')
+            logger.warning('Object names are not unique; no object names are assigned.')
+            self.lookup['object_name'] = OrderedDict()        
+        else:
+            self.lookup['object_name'] = temp
+            if len(temp) > 0:
+                logger.info('Finished reading object names.')
+        self.lookup['reverse_object_name'] = {v:k for k, v in self.lookup['object_name'].items()}
         
     def update_names(self, user_names = None, object_names = None):
         if user_names   is not None: self.lookup['default_name'] = user_names
@@ -270,7 +284,7 @@ class BeiweProject():
                           [len(self.lists['iOS']), len(self.lists['Android'])])
         flags = Summary(list(self.flags.keys()), 
                         [len(v) for v in list(self.flags.values())])
-        user_info_keys = ['raw_file_count', 'size', 
+        user_info_keys = ['raw_file_count', 'size_bytes', 
                           'irregular_directories', 'unregistered_files']
         totals = []
         for k in user_info_keys:
@@ -281,9 +295,10 @@ class BeiweProject():
         passive, s_lab, s_txt = data_to_text(self.passive, self.surveys, self.data, 
                                                   self.lookup['object_name'])
         survey = Summary(s_lab, s_txt)
-        self.summary = Summary(['Overview', 'Device Summary', 'Warning Flags',
-                                'Registry Summary', 'Passive Data', 'Survey Data'], 
-                               [overview, devices, flags, registry, passive, survey])
+        self.summary = Summary(['Overview', 'Device Summary', 'Registry Summary', 
+                                'Passive Data', 'Survey Data', 'Flagged Identifiers'], 
+                               [overview, devices, registry, 
+                                passive, survey, flags])
            
     @classmethod
     def load(cls, directory):
@@ -307,6 +322,7 @@ class BeiweProject():
                                  user_names =   self.lookup['default_name'], 
                                  object_names = self.lookup['object_name'])
             self.data[i] = temp
+        self.load_configurations()
         self.summarize()
         return(self)
 
@@ -351,6 +367,22 @@ class BeiweProject():
         for i in a:
             a[i] = self.data[i].assemble(streams)
         return(a)        
+
+    def settings(self, setting, user_ids = 'all'):
+        '''
+        Get a dictionary with a configuration setting for each user.
+        If more than one configuration file, use the first.
+        '''
+        if user_ids == 'all': have_ids = self.ids
+        else: have_ids = [i for i in user_ids if i in self.ids]        
+        s = OrderedDict.fromkeys(have_ids)
+        for i in have_ids:
+            try:
+                bc = self.configurations[self.lookup['configuration'][i][0]]
+                s[i] = bc.settings.passive[setting]
+            except:
+                logger.warning('User %s doesn\'t have setting \'%s\'.' % (i, setting))
+        return(s)        
         
     def plot():
         pass

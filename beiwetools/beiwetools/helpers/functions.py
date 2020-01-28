@@ -233,3 +233,39 @@ def check_same(x, y, to_check = 'all'):
     if len(results) > 0:
         same = all(results)
     return(same)
+    
+
+def coerce_to_dict(to_coerce, to_keys):
+    '''
+    Return a dictionary with the desired keys.
+    Values are lists.
+
+    Args:
+        to_coerce (dict, str, list, or Nonetype):
+            If dict, keys should be a subset of to_keys.
+                For keys in to_coerce.keys: 
+                    to_dict agrees with to_coerce (str and None are convereted to lists).
+                For keys not in to_coerce.keys: 
+                    Values of to_dict are [].
+            If str, values of to_dict are all [to_coerce].
+            If list, values of to_dict are all to_coerce.            
+            If None, values of to_dict are all [].
+        to_keys (list): List of keys.
+
+    Returns:
+        to_dict (OrderedDict):
+            Keys are keys, values are as described above.
+    '''
+    if isinstance(to_coerce, (dict, OrderedDict)):
+        t = OrderedDict()
+        for k in to_coerce:
+            if isinstance(to_coerce[k], str): t[k] = [to_coerce[k]]
+            if to_coerce[k] is None: t[k] = []
+        to_dict = OrderedDict(zip(to_keys, [[] for k in to_keys]))
+        to_dict.update(t)
+    else:
+        if isinstance(to_coerce, str): t = [to_coerce]        
+        elif isinstance(to_coerce, list): t = list(to_coerce)
+        elif to_coerce is None: t = []
+        to_dict = OrderedDict(zip(to_keys, [t]*len(to_keys)))
+    return(to_dict)

@@ -41,8 +41,9 @@ def paired_palette(n = 12):
     '''    
     return(color_palette("Paired", n))
 
-  
-# 24-hour color map to grayscale
-# 24-hour color map to yellow/blue scale    
-# Maybe one coarse (6-hour blocks) and one fine (1-hour blocks)
-# Also need labels, e.g. 'Midnight - 6AM', '6AM - Noon'
+
+# To add:
+#   24-hour color map to grayscale
+#   24-hour color map to yellow/blue scale    
+#   Maybe one coarse map (6-hour blocks) and one fine map (1-hour blocks)
+#   With labels, e.g. 'Midnight - 6AM', '6AM - Noon'

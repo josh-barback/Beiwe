@@ -9,10 +9,12 @@ from humanize import naturalsize
 from collections import OrderedDict
 
 from beiwetools.helpers.time import summarize_UTC_range
-from beiwetools.helpers.functions import (sort_by, write_json, read_json, 
-                                          setup_directories, setup_csv, write_to_csv)
+from beiwetools.helpers.functions import (sort_by, setup_directories, 
+                                          write_json, read_json, 
+                                          setup_csv, write_to_csv)
 
 from .headers import info_header
+
 
 logger = logging.getLogger(__name__)
 
@@ -377,24 +379,6 @@ def data_to_text(passive, surveys, data, object_names):
     return(p_text, ['\n' + st for st in list(surveys.keys())], s_text)
 
 
-def coerce_to_dict(to_coerce, keys):
-    '''
-    Convert str, list, or dict to a dictionary with the desired keys.
-    Returns a dictionary with desired keys. Values are:
-        []:          if to_coerce is None or a dictionary without that key.
-        [to_coerce]: if to_coerce is a string.
-        to_coerce:   if to_coerce is a list.
-    '''
-    if isinstance(to_coerce, (dict, OrderedDict)):
-        temp = OrderedDict.fromkeys(keys)
-        temp.update(to_coerce)
-    else:
-        temp = OrderedDict(zip(keys, [to_coerce]*len(keys)))
-    for k in temp:
-        if temp[k] is None: temp[k] = []
-        elif isinstance(temp[k], str): temp[k] = [temp[k]]
-    return(temp)
-
 def export_manage(d, directory):
     '''
     Handle exports for beiwetools.manage.classes.
@@ -428,7 +412,7 @@ def export_manage(d, directory):
         dirs.append(os.path.join(directory, 'records', 'registries'))
         setup_directories(dirs)        
         idp, usp, recp, regp = dirs
-        csvp = setup_csv('overview', directory, info_header + ['study_name', 'configuration'])
+        csvp = setup_csv('overview', directory, info_header + ['study_name', 'configuration_files'])
         for i in d.ids:
             ud = d.data[i]
             ud.export(regp)

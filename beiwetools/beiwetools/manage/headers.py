@@ -17,7 +17,7 @@ identifiers_header = [ # column names for raw Beiwe identifiers files.
   'manufacturer',
   'model',
   'beiwe_version' # Note that iPhone identifiers have an extra unlabeled column.  
-  ]               # The extra entry is appended to the 'beiwe_version' entry, separated by underscore.
+  ]               # beiwetools.manage appends the extra entry to the 'beiwe_version' value, separated by underscore.
 
 info_header = [
   'user_id',            # Beiwe user ID.
@@ -29,7 +29,7 @@ info_header = [
   'last_observation', 
   'total_days',         # Number of days between first and last observations.
   'raw_file_count',     # Number of unique raw files.
-  'size',               # Size of all raw files.
+  'size_bytes',         # Size of all raw files.
   'n_devices',          # Number of unique devices (phones).
   'os',                 # 'iOS' or 'Android'. May be 'both' if user switched phones.
   'irregular_directories', # Number of top survey directories that contain raw data files.
